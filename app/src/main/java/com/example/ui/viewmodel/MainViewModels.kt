@@ -10,6 +10,7 @@ import com.example.data.ai.NinghsingCheAiAssistant
 import com.example.data.model.AiChatMessage
 import com.example.data.model.AppThemeMode
 import com.example.data.model.Article
+import com.example.data.model.ArticleComment
 import com.example.data.model.Author
 import com.example.data.model.Bookmark
 import com.example.data.model.Category
@@ -22,6 +23,7 @@ import com.example.data.model.YearArchive
 import com.example.data.preferences.UserPreferencesRepository
 import com.example.data.repository.ArticleRepository
 import com.example.data.repository.DashboardRepository
+import com.example.data.repository.WebsiteSyncState
 import com.example.ui.dashboard.DashboardViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -44,21 +46,38 @@ class HomeViewModel(
     val featuredArticles: StateFlow<List<Article>> = repository.getFeaturedArticles()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val categories: List<Category> = repository.getCategories()
-    val authors: List<Author> = repository.getAuthors()
-    val yearArchives: List<YearArchive> = repository.getYearArchives()
+    val categories: StateFlow<List<Category>> = repository.categories
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), repository.getCategories())
+
+    val authors: StateFlow<List<Author>> = repository.authors
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), repository.getAuthors())
+
+    val yearArchives: StateFlow<List<YearArchive>> = repository.yearArchives
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), repository.getYearArchives())
+
+    val syncState: StateFlow<WebsiteSyncState> = repository.syncState
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), WebsiteSyncState())
 
     val readingHistory: StateFlow<List<ReadingHistory>> = repository.getReadingHistory()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun refreshFromWebsite() {
+        viewModelScope.launch {
+            repository.syncFromWebsite()
+        }
+    }
 }
 
 // Explore ViewModel
 class ExploreViewModel(
     private val repository: ArticleRepository
 ) : ViewModel() {
-    val categories: List<Category> = repository.getCategories()
-    val authors: List<Author> = repository.getAuthors()
-    val yearArchives: List<YearArchive> = repository.getYearArchives()
+    val categories: StateFlow<List<Category>> = repository.categories
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), repository.getCategories())
+    val authors: StateFlow<List<Author>> = repository.authors
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), repository.getAuthors())
+    val yearArchives: StateFlow<List<YearArchive>> = repository.yearArchives
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), repository.getYearArchives())
 
     val allArticles: StateFlow<List<Article>> = repository.getAllArticles()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -84,6 +103,12 @@ class SearchViewModel(
 
     private val _selectedYear = MutableStateFlow<Int?>(null)
     val selectedYear: StateFlow<Int?> = _selectedYear.asStateFlow()
+
+    val categories: StateFlow<List<Category>> = repository.categories
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), repository.getCategories())
+
+    val yearArchives: StateFlow<List<YearArchive>> = repository.yearArchives
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), repository.getYearArchives())
 
     val recentSearches: StateFlow<List<String>> = repository.getRecentSearches()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -166,6 +191,15 @@ class ReaderViewModel(
     private val _isBookmarked = MutableStateFlow(false)
     val isBookmarked: StateFlow<Boolean> = _isBookmarked.asStateFlow()
 
+    private val _comments = MutableStateFlow<List<ArticleComment>>(emptyList())
+    val comments: StateFlow<List<ArticleComment>> = _comments.asStateFlow()
+
+    private val _commentStatus = MutableStateFlow<String?>(null)
+    val commentStatus: StateFlow<String?> = _commentStatus.asStateFlow()
+
+    private val _isSubmittingComment = MutableStateFlow(false)
+    val isSubmittingComment: StateFlow<Boolean> = _isSubmittingComment.asStateFlow()
+
     val readerPreferences: StateFlow<ReaderPreferences> = preferencesRepository.readerPreferences
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ReaderPreferences())
 
@@ -212,9 +246,11 @@ class ReaderViewModel(
         viewModelScope.launch {
             val art = repository.getArticleById(articleId)
             _currentArticle.value = art
+            if (art != null && art.sourceUrl.contains("ningshingche.com")) {
+                _comments.value = repository.loadComments(art.sourceUrl)
+            }
 
             if (art != null) {
-                // Check bookmark status
                 repository.isBookmarked(art.id).collect { bookmarked ->
                     _isBookmarked.value = bookmarked
                 }
@@ -367,7 +403,7 @@ class AiViewModel(
         listOf(
             AiChatMessage(
                 id = "welcome",
-                text = "নমস্কার! আমি নিংশিং চে AI সহকারী। বিষ্ণুপ্রিয়া মণিপুরি ইতিহাস, ঐতিহ্য, সাহিত্য, ভাষা আন্দোলন, ইঞ্চৌঘর বা লোকসংস্কৃতি সংক্রান্ত যেকোনো তথ্য অনুসন্ধান করতে পারেন।",
+                text = "নমস্কার! আমি নিংশিং চে AI সহকারী। আমি নিংশিংচে.কম থেকে সিঙ্ক হওয়া সব প্রবন্ধ, লেখক ও বিভাগ খুঁজে উত্তর দিই। ইঞ্চৌঘর, মিংকৌ, ভাষা আন্দোলন বা কোনো লেখকের নাম জিজ্ঞাসা করুন।",
                 isUser = false,
                 citations = emptyList()
             )
@@ -459,14 +495,22 @@ class SettingsViewModel(
 class PdfArchiveViewModel(
     private val repository: ArticleRepository
 ) : ViewModel() {
-    val categories: List<com.example.data.model.PdfCategory> = repository.getPdfCategories()
-    val allPdfDocuments: List<com.example.data.model.PdfDocument> = repository.getPdfDocuments()
+    val categories: StateFlow<List<com.example.data.model.PdfCategory>> = repository.pdfCategories
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), repository.getPdfCategories())
+
+    val allPdfDocuments: StateFlow<List<com.example.data.model.PdfDocument>> = repository.pdfDocuments
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), repository.getPdfDocuments())
 
     private val _selectedCategoryId = MutableStateFlow("pdf-cat-all")
     val selectedCategoryId: StateFlow<String> = _selectedCategoryId.asStateFlow()
 
-    private val _filteredPdfs = MutableStateFlow<List<com.example.data.model.PdfDocument>>(allPdfDocuments)
-    val filteredPdfs: StateFlow<List<com.example.data.model.PdfDocument>> = _filteredPdfs.asStateFlow()
+    val filteredPdfs: StateFlow<List<com.example.data.model.PdfDocument>> = combine(
+        repository.pdfDocuments,
+        _selectedCategoryId
+    ) { docs, categoryId ->
+        if (categoryId == "pdf-cat-all" || categoryId.isBlank()) docs
+        else docs.filter { it.categorySlug == categoryId || it.category == categoryId }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), repository.getPdfDocuments())
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -475,7 +519,6 @@ class PdfArchiveViewModel(
         _selectedCategoryId.value = categoryId
         _isLoading.value = true
         viewModelScope.launch {
-            _filteredPdfs.value = repository.getPdfDocumentsByCategory(categoryId)
             kotlinx.coroutines.delay(150)
             _isLoading.value = false
         }

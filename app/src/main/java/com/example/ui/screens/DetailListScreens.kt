@@ -227,25 +227,38 @@ fun AuthorDetailScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            AsyncImage(
-                                model = author.avatarUrl,
-                                contentDescription = author.name,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .size(72.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primaryContainer)
-                            )
-
-                            Text(
-                                text = author.name,
-                                style = MaterialTheme.typography.titleLarge.copy(
-                                    fontFamily = FontFamily.Serif,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    fontSize = 18.sp
+                            Box {
+                                AsyncImage(
+                                    model = author.avatarUrl,
+                                    contentDescription = author.name,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .size(84.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.primaryContainer)
                                 )
-                            )
+                                if (author.isVerified) {
+                                    com.example.ui.components.VerifiedBadge(
+                                        modifier = Modifier.align(Alignment.BottomEnd),
+                                        size = 22.dp
+                                    )
+                                }
+                            }
+
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(
+                                    text = author.name,
+                                    style = MaterialTheme.typography.titleLarge.copy(
+                                        fontFamily = FontFamily.Serif,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontSize = 18.sp
+                                    )
+                                )
+                                if (author.isVerified) {
+                                    com.example.ui.components.VerifiedBadge(size = 18.dp)
+                                }
+                            }
 
                             Text(
                                 text = "${author.designation} • ${author.location}",

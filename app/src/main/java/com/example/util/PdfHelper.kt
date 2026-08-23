@@ -50,8 +50,9 @@ object PdfHelper {
         return try {
             val url = URL(pdfUrl)
             val connection = url.openConnection() as HttpURLConnection
-            connection.connectTimeout = 3000
-            connection.readTimeout = 4000
+            connection.connectTimeout = 20000
+            connection.readTimeout = 60000
+            connection.setRequestProperty("User-Agent", "Mozilla/5.0 NingshingCheApp/1.0")
             connection.requestMethod = "GET"
             connection.connect()
 

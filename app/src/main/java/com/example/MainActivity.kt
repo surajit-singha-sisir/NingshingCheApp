@@ -37,21 +37,26 @@ import androidx.navigation.navDeepLink
 import com.example.data.model.AppThemeMode
 import com.example.data.model.ReaderPreferences
 import com.example.ui.components.EditorialBottomNavBar
-import com.example.ui.components.EditorialNavigationDrawerContent
+import com.example.ui.components.PortalDrawerContent
+import com.example.ui.components.PortalTopBar
 import com.example.ui.navigation.Screen
+import com.example.ui.screens.AboutScreen
 import com.example.ui.screens.AiAssistantScreen
 import com.example.ui.screens.ArchiveYearDetailScreen
 import com.example.ui.screens.ArticleReaderScreen
 import com.example.ui.screens.AuthorDetailScreen
+import com.example.ui.screens.AuthorsDirectoryScreen
 import com.example.ui.screens.BookmarksScreen
 import com.example.ui.screens.CategoryDetailScreen
 import com.example.ui.screens.ExploreScreen
+import com.example.ui.screens.FeaturedScreen
 import com.example.ui.screens.HistoryScreen
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.PdfArchiveScreen
 import com.example.ui.screens.PdfViewerScreen
 import com.example.ui.screens.SearchScreen
 import com.example.ui.screens.SettingsScreen
+import com.example.ui.screens.SocialActivitiesScreen
 import com.example.ui.dashboard.DashboardScreen
 import com.example.ui.dashboard.DashboardViewModel
 import com.example.ui.theme.MyApplicationTheme
@@ -83,6 +88,7 @@ class MainActivity : ComponentActivity() {
         )
 
         setContent {
+            val uiScope = rememberCoroutineScope()
             val preferences by app.preferencesRepository.readerPreferences
                 .collectAsStateWithLifecycle(initialValue = ReaderPreferences())
             val systemInDark = isSystemInDarkTheme()
@@ -93,7 +99,16 @@ class MainActivity : ComponentActivity() {
             }
 
             MyApplicationTheme(darkTheme = isDark) {
-                NinghsingCheAppRoot(factory)
+                NinghsingCheAppRoot(
+                    factory = factory,
+                    isDark = isDark,
+                    onToggleTheme = {
+                        val next = if (isDark) AppThemeMode.LIGHT else AppThemeMode.DARK
+                        uiScope.launch {
+                            app.preferencesRepository.updateAppThemeMode(next)
+                        }
+                    }
+                )
             }
         }
     }
@@ -126,59 +141,78 @@ fun NinghsingCheAppRoot(factory: ViewModelFactory) {
         Screen.Home.route,
         Screen.Explore.route,
         Screen.Bookmarks.route,
-        Screen.PdfArchive.route
+        Screen.PdfArchive.route,
+        Screen.Featured.route
     )
+    val showPortalBar = currentRoute in listOf(
+        Screen.Home.route,
+        Screen.Explore.route,
+        Screen.Bookmarks.route,
+        Screen.PdfArchive.route,
+        Screen.Featured.route,
+        Screen.About.route,
+        Screen.SocialActivities.route,
+        Screen.AuthorsDirectory.route
+    )
+
+    fun go(route: String) {
+        scope.launch {
+            drawerState.close()
+            if (route != currentRoute) {
+                navController.navigate(route) {
+                    popUpTo(Screen.Home.route) { saveState = true }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            }
+        }
+    }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            EditorialNavigationDrawerContent(
+            PortalDrawerContent(
                 currentRoute = currentRoute,
-                onNavigate = { route ->
-                    scope.launch {
-                        drawerState.close()
-                        if (route != currentRoute) {
-                            navController.navigate(route) {
-                                popUpTo(Screen.Home.route) {
-                                    saveState = true
-                                }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        }
-                    }
+                isDark = isDark,
+                onNavigate = { go(it) },
+                onCategory = { slug ->
+                    navController.navigate(Screen.CategoryDetail.createRoute(slug))
                 },
-                onCloseDrawer = {
-                    scope.launch {
-                        drawerState.close()
-                    }
+                onYear = { year ->
+                    navController.navigate(Screen.ArchiveDetail.createRoute(year))
                 },
-                onVisitWebsite = {
-                    scope.launch {
-                        drawerState.close()
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://ningshingche.com"))
-                        context.startActivity(intent)
-                    }
+                onExternal = { url ->
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
                 },
+                onToggleTheme = onToggleTheme,
                 onShareApp = {
-                    scope.launch {
-                        drawerState.close()
-                        val sendIntent = Intent().apply {
-                            action = Intent.ACTION_SEND
-                            putExtra(
-                                Intent.EXTRA_TEXT,
-                                "নিংশিং চে - বিষ্ণুপ্রিয়া মণিপুরি ডিজিটাল সাংস্কৃতিক আর্কাইভ ও সাহিত্য পত্রিকা। ডাউনলোড করুন ও পড়ুন: https://ningshingche.com"
-                            )
-                            type = "text/plain"
-                        }
-                        context.startActivity(Intent.createChooser(sendIntent, "নিংশিং চে শেয়ার করুন"))
+                    val sendIntent = Intent().apply {
+                        action = Intent.ACTION_SEND
+                        putExtra(
+                            Intent.EXTRA_TEXT,
+                            "নিংশিং চে - বিষ্ণুপ্রিয়া মণিপুরি ডিজিটাল সাংস্কৃতিক আর্কাইভ ও সাহিত্য পত্রিকা। https://ningshingche.com"
+                        )
+                        type = "text/plain"
                     }
-                }
+                    context.startActivity(Intent.createChooser(sendIntent, "নিংশিং চে শেয়ার করুন"))
+                },
+                onCloseDrawer = { scope.launch { drawerState.close() } }
             )
         }
     ) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
+            topBar = {
+                if (showPortalBar) {
+                    PortalTopBar(
+                        isDark = isDark,
+                        onMenuClick = { scope.launch { drawerState.open() } },
+                        onSearchClick = { go(Screen.Search.route) },
+                        onAiClick = { navController.navigate(Screen.AiAssistant.route) },
+                        onToggleTheme = onToggleTheme
+                    )
+                }
+            },
             bottomBar = {
                 if (showBottomBar) {
                     EditorialBottomNavBar(
@@ -265,6 +299,26 @@ fun NinghsingCheAppRoot(factory: ViewModelFactory) {
                     }
 
                     // Explore Screen
+                    composable(Screen.Featured.route) {
+                        FeaturedScreen(
+                            viewModel = homeViewModel,
+                            onArticleClick = { navController.navigate(Screen.ArticleDetail.createRoute(it)) }
+                        )
+                    }
+                    composable(Screen.About.route) { AboutScreen() }
+                    composable(Screen.SocialActivities.route) {
+                        SocialActivitiesScreen(
+                            viewModel = exploreViewModel,
+                            onArticleClick = { navController.navigate(Screen.ArticleDetail.createRoute(it)) }
+                        )
+                    }
+                    composable(Screen.AuthorsDirectory.route) {
+                        AuthorsDirectoryScreen(
+                            viewModel = exploreViewModel,
+                            onAuthorClick = { navController.navigate(Screen.AuthorDetail.createRoute(it)) }
+                        )
+                    }
+
                     composable(Screen.Explore.route) {
                         ExploreScreen(
                             viewModel = exploreViewModel,
@@ -374,6 +428,40 @@ fun NinghsingCheAppRoot(factory: ViewModelFactory) {
 
                     // Article Reader Screen with Deep Links
                     composable(
+                        route = "web_article/{year}/{month}/{slug}",
+                        arguments = listOf(
+                            navArgument("year") { type = NavType.StringType },
+                            navArgument("month") { type = NavType.StringType },
+                            navArgument("slug") { type = NavType.StringType }
+                        ),
+                        deepLinks = listOf(
+                            navDeepLink { uriPattern = "https://ningshingche.com/{year}/{month}/{slug}" },
+                            navDeepLink { uriPattern = "http://ningshingche.com/{year}/{month}/{slug}" }
+                        )
+                    ) { backStackEntry ->
+                        val year = backStackEntry.arguments?.getString("year").orEmpty()
+                        val month = backStackEntry.arguments?.getString("month").orEmpty()
+                        val slug = backStackEntry.arguments?.getString("slug").orEmpty()
+                            .removeSuffix(".kehem")
+                        val articleId = if (year.isNotBlank() && month.isNotBlank()) {
+                            "$year/$month/$slug"
+                        } else {
+                            slug.ifBlank { "art-1" }
+                        }
+                        ArticleReaderScreen(
+                            articleId = articleId,
+                            viewModel = readerViewModel,
+                            onBackClick = { navController.popBackStack() },
+                            onAuthorClick = { authorId ->
+                                navController.navigate(Screen.AuthorDetail.createRoute(authorId))
+                            },
+                            onRelatedArticleClick = { nextId ->
+                                navController.navigate(Screen.ArticleDetail.createRoute(nextId))
+                            }
+                        )
+                    }
+
+                    composable(
                         route = Screen.ArticleDetail.route,
                         arguments = listOf(navArgument("articleId") { type = NavType.StringType }),
                         deepLinks = listOf(
@@ -404,7 +492,8 @@ fun NinghsingCheAppRoot(factory: ViewModelFactory) {
                     ) { backStackEntry ->
                         val slug = backStackEntry.arguments?.getString("categorySlug") ?: ""
                         val allArticles by exploreViewModel.allArticles.collectAsStateWithLifecycle()
-                        val category = exploreViewModel.categories.find { it.slug == slug }
+                        val liveCategories by exploreViewModel.categories.collectAsStateWithLifecycle()
+                        val category = liveCategories.find { it.slug == slug }
                         val filteredArticles = allArticles.filter { it.categorySlug == slug }
 
                         CategoryDetailScreen(
@@ -424,7 +513,8 @@ fun NinghsingCheAppRoot(factory: ViewModelFactory) {
                     ) { backStackEntry ->
                         val authorId = backStackEntry.arguments?.getString("authorId") ?: ""
                         val allArticles by exploreViewModel.allArticles.collectAsStateWithLifecycle()
-                        val author = exploreViewModel.authors.find { it.id == authorId }
+                        val liveAuthors by exploreViewModel.authors.collectAsStateWithLifecycle()
+                        val author = liveAuthors.find { it.id == authorId }
                         val filteredArticles = allArticles.filter { it.authorId == authorId }
 
                         AuthorDetailScreen(
@@ -444,7 +534,8 @@ fun NinghsingCheAppRoot(factory: ViewModelFactory) {
                     ) { backStackEntry ->
                         val year = backStackEntry.arguments?.getInt("year") ?: 2025
                         val allArticles by exploreViewModel.allArticles.collectAsStateWithLifecycle()
-                        val yearArchive = exploreViewModel.yearArchives.find { it.year == year }
+                        val liveArchives by exploreViewModel.yearArchives.collectAsStateWithLifecycle()
+                        val yearArchive = liveArchives.find { it.year == year }
                         val filteredArticles = allArticles.filter { it.year == year }
 
                         ArchiveYearDetailScreen(

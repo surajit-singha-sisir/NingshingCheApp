@@ -4,6 +4,7 @@ import android.app.Application
 import com.example.data.ai.NinghsingCheAiAssistant
 import com.example.data.local.AppDatabase
 import com.example.data.preferences.UserPreferencesRepository
+import com.example.data.remote.NingshingCheWebsiteClient
 import com.example.data.remote.SupabaseClient
 import com.example.data.repository.ArticleRepository
 import com.example.data.repository.DashboardRepository
@@ -22,6 +23,9 @@ class NinghsingCheApp : Application() {
     lateinit var aiAssistant: NinghsingCheAiAssistant
         private set
 
+    lateinit var websiteClient: NingshingCheWebsiteClient
+        private set
+
     lateinit var supabaseClient: SupabaseClient
         private set
 
@@ -32,9 +36,10 @@ class NinghsingCheApp : Application() {
         super.onCreate()
         instance = this
         database = AppDatabase.getInstance(this)
+        websiteClient = NingshingCheWebsiteClient()
         supabaseClient = SupabaseClient(this)
         dashboardRepository = DashboardRepository(this, supabaseClient, database)
-        articleRepository = ArticleRepository(database)
+        articleRepository = ArticleRepository(database, websiteClient)
         preferencesRepository = UserPreferencesRepository(this)
         aiAssistant = NinghsingCheAiAssistant(articleRepository)
     }

@@ -40,7 +40,8 @@ data class Author(
     val avatarUrl: String,
     val articleCount: Int,
     val location: String = "বাংলাদেশ / ভারত",
-    val topics: List<String> = emptyList()
+    val topics: List<String> = emptyList(),
+    val isVerified: Boolean = false
 )
 
 data class YearArchive(
@@ -100,7 +101,7 @@ enum class AppThemeMode {
 }
 
 data class ReaderPreferences(
-    val fontSizeSp: Float = 17f,
+    val fontSizeSp: Float = 18f,
     val lineSpacingMultiplier: Float = 1.6f,
     val themeMode: ReaderThemeMode = ReaderThemeMode.PAPER,
     val appThemeMode: AppThemeMode = AppThemeMode.SYSTEM,
@@ -115,6 +116,12 @@ data class ArticleCitation(
     val author: String,
     val category: String,
     val snippet: String
+)
+
+data class ArticleComment(
+    val name: String,
+    val content: String,
+    val meta: String = ""
 )
 
 data class AiChatMessage(

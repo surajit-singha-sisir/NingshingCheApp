@@ -18,39 +18,30 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.AccessTime
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
-import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.FormatSize
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
@@ -58,7 +49,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -66,28 +56,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
-import com.example.data.model.ReaderThemeMode
+import com.example.data.remote.NingshingCheWebsiteClient
 import com.example.ui.components.ArticleListItemCard
 import com.example.ui.components.ArticleReaderSkeleton
-import com.example.ui.components.getCategoryIcon
-import com.example.ui.theme.CrispCanvas
-import com.example.ui.theme.CrispText
-import com.example.ui.theme.NightCanvas
-import com.example.ui.theme.NightTextPrimary
-import com.example.ui.theme.PaperCanvasLight
-import com.example.ui.theme.SepiaCanvas
-import com.example.ui.theme.SepiaText
-import com.example.ui.theme.TextPrimaryLight
+import com.example.ui.theme.Kalpurush
+import com.example.ui.theme.PortalSaffron
 import com.example.ui.viewmodel.ReaderViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -100,58 +83,27 @@ fun ArticleReaderScreen(
     onRelatedArticleClick: (String) -> Unit
 ) {
     val context = LocalContext.current
-
-    LaunchedEffect(articleId) {
-        viewModel.loadArticle(articleId)
-    }
+    LaunchedEffect(articleId) { viewModel.loadArticle(articleId) }
 
     val article by viewModel.currentArticle.collectAsStateWithLifecycle()
     val relatedArticles by viewModel.relatedArticles.collectAsStateWithLifecycle()
     val isBookmarked by viewModel.isBookmarked.collectAsStateWithLifecycle()
     val preferences by viewModel.readerPreferences.collectAsStateWithLifecycle()
     val isTtsPlaying by viewModel.isTtsPlaying.collectAsStateWithLifecycle()
-    val ttsStatusText by viewModel.ttsProgressText.collectAsStateWithLifecycle()
+    val comments by viewModel.comments.collectAsStateWithLifecycle()
+    val commentStatus by viewModel.commentStatus.collectAsStateWithLifecycle()
+    val submitting by viewModel.isSubmittingComment.collectAsStateWithLifecycle()
 
-    var showAppearanceSheet by remember { mutableStateOf(false) }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-    val listState = rememberLazyListState()
-
-    // Determine reader background and text colors based on selected reading theme
-    val (readerBgColor, readerTextColor) = when (preferences.themeMode) {
-        ReaderThemeMode.PAPER -> PaperCanvasLight to TextPrimaryLight
-        ReaderThemeMode.SEPIA -> SepiaCanvas to SepiaText
-        ReaderThemeMode.NIGHT -> NightCanvas to NightTextPrimary
-        ReaderThemeMode.CRISP -> CrispCanvas to CrispText
-    }
-
-    // Dynamic high-contrast link and accent color configured for both Dark and Light modes
-    val linkColor = when (preferences.themeMode) {
-        ReaderThemeMode.NIGHT -> Color(0xFFFBBF24) // Bright Gold/Amber for dark theme
-        ReaderThemeMode.SEPIA -> Color(0xFF92400E) // Warm Amber-Brown
-        ReaderThemeMode.CRISP -> Color(0xFF0284C7) // Vibrant Sky Blue
-        ReaderThemeMode.PAPER -> Color(0xFFB45309) // Editorial Amber
-    }
-
-    val linkContainerColor = when (preferences.themeMode) {
-        ReaderThemeMode.NIGHT -> Color(0xFF1E293B)
-        ReaderThemeMode.SEPIA -> Color(0xFFEADBCE)
-        ReaderThemeMode.CRISP -> Color(0xFFF0F9FF)
-        ReaderThemeMode.PAPER -> Color(0xFFFEF3C7)
-    }
-
-    // Save reading position
-    val firstVisibleIndex by remember { derivedStateOf { listState.firstVisibleItemIndex } }
-    LaunchedEffect(firstVisibleIndex) {
-        if (article != null) {
-            val progress = (firstVisibleIndex.toFloat() / 5f).coerceIn(0f, 1f)
-            viewModel.updateReadingProgress(firstVisibleIndex, progress)
-        }
-    }
+    var showType by remember { mutableStateOf(false) }
+    var name by remember { mutableStateOf("") }
+    var address by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
+    var phone by remember { mutableStateOf("") }
+    var comment by remember { mutableStateOf("") }
 
     var isSkeletonLoading by remember(articleId) { mutableStateOf(true) }
     LaunchedEffect(articleId) {
-        kotlinx.coroutines.delay(1000L) // Minimum 1 second skeleton view
+        kotlinx.coroutines.delay(500L)
         isSkeletonLoading = false
     }
 
@@ -160,728 +112,305 @@ fun ArticleReaderScreen(
         return
     }
 
-    val currentArt = article!!
+    val current = article!!
+    val blocks = remember(current.content) { NingshingCheWebsiteClient.contentBlocks(current.content) }
+    val scheme = MaterialTheme.colorScheme
+    val fieldColors = OutlinedTextFieldDefaults.colors(
+        focusedBorderColor = PortalSaffron,
+        unfocusedBorderColor = scheme.outline,
+        focusedContainerColor = scheme.surfaceVariant,
+        unfocusedContainerColor = scheme.surfaceVariant,
+        focusedTextColor = scheme.onSurface,
+        unfocusedTextColor = scheme.onSurface,
+        cursorColor = PortalSaffron
+    )
 
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(readerBgColor)
+            .background(scheme.background)
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            // Reader Top Navigation Bar
-            Surface(
-                color = readerBgColor,
-                shadowElevation = 2.dp,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(
-                        onClick = onBackClick,
-                        modifier = Modifier.testTag("reader_back_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = readerTextColor
-                        )
-                    }
-
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Appearance / Typography Sheet Button
-                        IconButton(
-                            onClick = { showAppearanceSheet = true },
-                            modifier = Modifier.testTag("reader_font_settings_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.FormatSize,
-                                contentDescription = "Font Settings",
-                                tint = readerTextColor
-                            )
-                        }
-
-                        // Audio Text-To-Speech Button
-                        IconButton(
-                            onClick = { viewModel.toggleTts() },
-                            modifier = Modifier.testTag("reader_tts_button")
-                        ) {
-                            Icon(
-                                imageVector = if (isTtsPlaying) Icons.Default.Pause else Icons.Default.VolumeUp,
-                                contentDescription = "Listen",
-                                tint = if (isTtsPlaying) MaterialTheme.colorScheme.primary else readerTextColor
-                            )
-                        }
-
-                        // Bookmark Button
-                        IconButton(
-                            onClick = { viewModel.toggleBookmark() },
-                            modifier = Modifier.testTag("reader_bookmark_button")
-                        ) {
-                            Icon(
-                                imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                                contentDescription = "Bookmark",
-                                tint = if (isBookmarked) MaterialTheme.colorScheme.primary else readerTextColor
-                            )
-                        }
-
-                        // Share Button
-                        IconButton(
-                            onClick = {
-                                val sendIntent: Intent = Intent().apply {
-                                    action = Intent.ACTION_SEND
-                                    putExtra(Intent.EXTRA_TITLE, currentArt.title)
-                                    putExtra(
-                                        Intent.EXTRA_TEXT,
-                                        "${currentArt.title}\n\n${currentArt.excerpt}\n\nনিংশিং চে ডিজিটাল তথ্যকোষে সম্পূর্ণ প্রবন্ধটি পড়ুন:\n${currentArt.sourceUrl}"
-                                    )
-                                    type = "text/plain"
-                                }
-                                val shareIntent = Intent.createChooser(sendIntent, "প্রবন্ধটি শেয়ার করুন")
-                                context.startActivity(shareIntent)
-                            },
-                            modifier = Modifier.testTag("reader_share_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Share,
-                                contentDescription = "Share",
-                                tint = readerTextColor
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Text-To-Speech Floating Active Bar
-            if (isTtsPlaying || ttsStatusText.isNotEmpty()) {
-                Surface(
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.VolumeUp,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Text(
-                                text = ttsStatusText.ifEmpty { "অডিও পাঠ চলছে..." },
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    color = MaterialTheme.colorScheme.onPrimary,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 12.sp
-                                )
-                            )
-                        }
-
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            IconButton(
-                                onClick = { viewModel.toggleTts() },
-                                modifier = Modifier.size(28.dp)
-                            ) {
-                                Icon(
-                                    imageVector = if (isTtsPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                    contentDescription = "Play/Pause",
-                                    tint = MaterialTheme.colorScheme.onPrimary,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                            IconButton(
-                                onClick = { viewModel.stopTts() },
-                                modifier = Modifier.size(28.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Stop,
-                                    contentDescription = "Stop",
-                                    tint = MaterialTheme.colorScheme.onPrimary,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Article Content Reader Scroll
-            LazyColumn(
-                state = listState,
+        Surface(color = scheme.surface, shadowElevation = 2.dp) {
+            Row(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .testTag("article_reader_content"),
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .fillMaxWidth()
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Category & Date metadata header with Google Icons
-                item {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = linkContainerColor
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = getCategoryIcon(currentArt.categorySlug),
-                                    contentDescription = null,
-                                    tint = linkColor,
-                                    modifier = Modifier.size(13.dp)
-                                )
-                                Text(
-                                    text = currentArt.category,
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        color = linkColor,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 11.sp
-                                    )
-                                )
-                            }
-                        }
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(3.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.CalendarToday,
-                                contentDescription = null,
-                                tint = readerTextColor.copy(alpha = 0.7f),
-                                modifier = Modifier.size(12.dp)
-                            )
-                            Text(
-                                text = currentArt.publishedDate,
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    color = readerTextColor.copy(alpha = 0.7f),
-                                    fontSize = 12.sp
-                                )
-                            )
-                        }
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(3.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AccessTime,
-                                contentDescription = null,
-                                tint = readerTextColor.copy(alpha = 0.7f),
-                                modifier = Modifier.size(12.dp)
-                            )
-                            Text(
-                                text = "${currentArt.readingTimeMinutes} মিনিট পাঠ",
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    color = readerTextColor.copy(alpha = 0.7f),
-                                    fontSize = 12.sp
-                                )
-                            )
-                        }
-                    }
+                IconButton(onClick = onBackClick, modifier = Modifier.testTag("reader_back_button")) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = scheme.onSurface)
                 }
-
-                // Article Headline
-                item {
-                    Text(
-                        text = currentArt.title,
-                        style = MaterialTheme.typography.displaySmall.copy(
-                            fontFamily = FontFamily.Serif,
-                            fontWeight = FontWeight.Bold,
-                            color = readerTextColor,
-                            fontSize = (preferences.fontSizeSp + 7).sp,
-                            lineHeight = (preferences.fontSizeSp * preferences.lineSpacingMultiplier + 10).sp
-                        )
+                Spacer(Modifier.weight(1f))
+                IconButton(onClick = { showType = true }) {
+                    Icon(Icons.Default.FormatSize, contentDescription = "আকার", tint = scheme.onSurface)
+                }
+                IconButton(onClick = { viewModel.toggleTts() }) {
+                    Icon(
+                        if (isTtsPlaying) Icons.Default.Pause else Icons.Default.VolumeUp,
+                        contentDescription = "শুনিক",
+                        tint = if (isTtsPlaying) PortalSaffron else scheme.onSurface
                     )
                 }
-
-                // Author Row with Google Icons
-                item {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = linkContainerColor.copy(alpha = 0.5f),
-                        border = BorderStroke(1.dp, linkColor.copy(alpha = 0.3f)),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onAuthorClick(currentArt.authorId) }
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Box {
-                                AsyncImage(
-                                    model = currentArt.authorAvatarUrl.ifEmpty { "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&q=80" },
-                                    contentDescription = currentArt.authorName,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier
-                                        .size(44.dp)
-                                        .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.primaryContainer)
-                                )
-                                Surface(
-                                    shape = CircleShape,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier
-                                        .size(16.dp)
-                                        .align(Alignment.BottomEnd)
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            imageVector = Icons.Default.EditNote,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onPrimary,
-                                            modifier = Modifier.size(10.dp)
-                                        )
-                                    }
-                                }
-                            }
-
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = currentArt.authorName,
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        fontFamily = FontFamily.Serif,
-                                        fontWeight = FontWeight.Bold,
-                                        color = readerTextColor,
-                                        fontSize = 15.sp
-                                    )
-                                )
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Person,
-                                        contentDescription = null,
-                                        tint = linkColor,
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                    Text(
-                                        text = "গবেষক ও লেখক • নিংশিং চে ডিজিটাল আর্কাইভ",
-                                        style = MaterialTheme.typography.bodySmall.copy(
-                                            color = linkColor,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                    )
-                                }
-                            }
-
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Author profile",
-                                tint = linkColor,
-                                modifier = Modifier
-                                    .size(16.dp)
-                            )
-                        }
-                    }
-                }
-
-                // Hero Image
-                item {
-                    Card(
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        AsyncImage(
-                            model = currentArt.featuredImageUrl,
-                            contentDescription = currentArt.title,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .aspectRatio(16f / 10f)
-                        )
-                    }
-                }
-
-                // Excerpt / Abstract Blockquote
-                item {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = linkContainerColor,
-                        border = BorderStroke(1.dp, linkColor.copy(alpha = 0.4f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = currentArt.excerpt,
-                            style = MaterialTheme.typography.bodyMedium.copy(
-                                fontFamily = FontFamily.Serif,
-                                color = readerTextColor,
-                                fontSize = (preferences.fontSizeSp - 1).sp,
-                                lineHeight = (preferences.fontSizeSp * 1.5).sp,
-                                fontWeight = FontWeight.Medium
-                            ),
-                            modifier = Modifier.padding(16.dp)
-                        )
-                    }
-                }
-
-                // Main Article Body Paragraphs
-                val paragraphs = currentArt.content.split("\n\n")
-                items(paragraphs) { paragraph ->
-                    if (paragraph.isNotBlank()) {
-                        Text(
-                            text = paragraph.trim(),
-                            style = MaterialTheme.typography.bodyLarge.copy(
-                                color = readerTextColor,
-                                fontSize = preferences.fontSizeSp.sp,
-                                lineHeight = (preferences.fontSizeSp * preferences.lineSpacingMultiplier).sp,
-                                letterSpacing = 0.3.sp
-                            )
-                        )
-                    }
-                }
-
-                // Dark & Light Mode Configured Web Source & Citation Links Box
-                item {
-                    Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = linkContainerColor,
-                        border = BorderStroke(1.dp, linkColor.copy(alpha = 0.45f)),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(currentArt.sourceUrl))
-                                context.startActivity(browserIntent)
-                            }
-                            .testTag("article_source_link")
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Surface(
-                                shape = CircleShape,
-                                color = linkColor,
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Language,
-                                        contentDescription = null,
-                                        tint = if (preferences.themeMode == ReaderThemeMode.NIGHT) Color.Black else Color.White,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
-
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "অনলাইন মূল উৎস ও রেফারেন্স লিংক",
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        color = linkColor,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 11.sp
-                                    )
-                                )
-                                Text(
-                                    text = currentArt.sourceUrl,
-                                    style = MaterialTheme.typography.bodyMedium.copy(
-                                        color = readerTextColor,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 13.sp
-                                    )
-                                )
-                                Text(
-                                    text = "নিংশিং চে ডিজিটাল আর্কাইভে সরাসরি পড়ুন ›",
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        color = linkColor,
-                                        fontSize = 11.sp
-                                    )
-                                )
-                            }
-
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                                contentDescription = "Open Web Link",
-                                tint = linkColor,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-                }
-
-                // Tags with Google Icons
-                if (currentArt.tags.isNotEmpty()) {
-                    item {
-                        Column(
-                            modifier = Modifier.padding(top = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Tag,
-                                    contentDescription = null,
-                                    tint = linkColor,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Text(
-                                    text = "সম্পর্কিত বিষয় ও ট্যাগ:",
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        color = linkColor,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                )
-                            }
-
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                items(currentArt.tags) { tag ->
-                                    Surface(
-                                        shape = RoundedCornerShape(12.dp),
-                                        color = linkContainerColor,
-                                        border = BorderStroke(1.dp, linkColor.copy(alpha = 0.3f))
-                                    ) {
-                                        Text(
-                                            text = "#$tag",
-                                            style = MaterialTheme.typography.labelSmall.copy(
-                                                color = linkColor,
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 11.sp
-                                            ),
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Divider
-                item {
-                    HorizontalDivider(
-                        color = linkColor.copy(alpha = 0.25f),
-                        thickness = 1.dp,
-                        modifier = Modifier.padding(vertical = 12.dp)
+                IconButton(onClick = { viewModel.toggleBookmark() }) {
+                    Icon(
+                        if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                        contentDescription = "সংরক্ষণ",
+                        tint = if (isBookmarked) PortalSaffron else scheme.onSurface
                     )
                 }
-
-                // Related Articles
-                if (relatedArticles.isNotEmpty()) {
-                    item {
-                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.AutoAwesome,
-                                    contentDescription = null,
-                                    tint = linkColor,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Text(
-                                    text = "এই বিষয়ের আরও নির্বাচিত প্রবন্ধ",
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        fontFamily = FontFamily.Serif,
-                                        fontWeight = FontWeight.Bold,
-                                        color = readerTextColor,
-                                        fontSize = 16.sp
-                                    )
-                                )
-                            }
-
-                            relatedArticles.forEach { rel ->
-                                ArticleListItemCard(
-                                    article = rel,
-                                    onClick = { onRelatedArticleClick(rel.id) }
-                                )
-                            }
-                        }
+                IconButton(onClick = {
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, "${current.title}\n${current.sourceUrl}")
                     }
-                }
-
-                item {
-                    Spacer(modifier = Modifier.height(24.dp))
+                    context.startActivity(Intent.createChooser(intent, "শেয়ার"))
+                }) {
+                    Icon(Icons.Default.Share, contentDescription = "শেয়ার", tint = scheme.onSurface)
                 }
             }
         }
 
-        // Appearance & Typography Modal Bottom Sheet (100% Bengali, NO English in parentheses)
-        if (showAppearanceSheet) {
-            ModalBottomSheet(
-                onDismissRequest = { showAppearanceSheet = false },
-                sheetState = sheetState,
-                containerColor = MaterialTheme.colorScheme.surface
-            ) {
-                Column(
+        LazyColumn(
+            state = rememberLazyListState(),
+            modifier = Modifier
+                .fillMaxSize()
+                .testTag("article_reader_content"),
+            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            item {
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = PortalSaffron
+                ) {
+                    Text(
+                        text = current.category,
+                        fontFamily = Kalpurush,
+                        color = androidx.compose.ui.graphics.Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                    )
+                }
+            }
+            item {
+                Text(
+                    text = current.title,
+                    fontFamily = Kalpurush,
+                    fontWeight = FontWeight.Bold,
+                    color = scheme.secondary,
+                    fontSize = (preferences.fontSizeSp + 8).sp,
+                    lineHeight = (preferences.fontSizeSp + 16).sp
+                )
+            }
+            item {
+                Text(
+                    text = "ফঙিসিল: ${current.publishedDate}",
+                    fontFamily = Kalpurush,
+                    color = scheme.onSurfaceVariant,
+                    fontSize = 14.sp
+                )
+            }
+            item {
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                        .clickable { onAuthorClick(current.authorId) },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.FormatSize,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
+                    Box {
+                        AsyncImage(
+                            model = current.authorAvatarUrl.ifBlank { com.example.data.repository.NinghsingCheContentData.APP_LOGO_URL },
+                            contentDescription = current.authorName,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(scheme.surfaceVariant)
                         )
-                        Text(
-                            text = "পাঠের স্বাচ্ছন্দ্য ও ডিসপ্লে সেটিংস",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontFamily = FontFamily.Serif,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                fontSize = 18.sp
+                        if (com.example.data.remote.AuthorProfiles.isOfficial(current.authorAvatarUrl)) {
+                            com.example.ui.components.VerifiedBadge(
+                                modifier = Modifier.align(Alignment.BottomEnd),
+                                size = 16.dp
                             )
-                        )
+                        }
                     }
-
-                    // Theme Presets
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            text = "পৃষ্ঠার ব্যাকগ্রাউন্ড থিম",
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        )
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            val themes = listOf(
-                                Triple(ReaderThemeMode.PAPER, "কাগজ", PaperCanvasLight),
-                                Triple(ReaderThemeMode.SEPIA, "সেপিয়া", SepiaCanvas),
-                                Triple(ReaderThemeMode.NIGHT, "রাত্রি", NightCanvas),
-                                Triple(ReaderThemeMode.CRISP, "শ্বেত", CrispCanvas)
-                            )
-                            themes.forEach { (mode, label, color) ->
-                                val isSelected = preferences.themeMode == mode
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = color,
-                                    border = BorderStroke(
-                                        2.dp,
-                                        if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-                                    ),
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(44.dp)
-                                        .clickable { viewModel.updateThemeMode(mode) }
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Text(
-                                            text = label,
-                                            style = MaterialTheme.typography.labelSmall.copy(
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (mode == ReaderThemeMode.NIGHT) NightTextPrimary else TextPrimaryLight
-                                            )
-                                        )
-                                    }
-                                }
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(current.authorName, fontFamily = Kalpurush, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = scheme.onSurface)
+                            if (com.example.data.remote.AuthorProfiles.isOfficial(current.authorAvatarUrl)) {
+                                com.example.ui.components.VerifiedBadge(size = 15.dp)
                             }
                         }
-                    }
-
-                    // Font Size Slider
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = "অক্ষরের আকার",
-                                style = MaterialTheme.typography.labelMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            )
-                            Text(
-                                text = "${preferences.fontSizeSp.toInt()} sp",
-                                style = MaterialTheme.typography.labelMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            )
-                        }
-
-                        Slider(
-                            value = preferences.fontSizeSp,
-                            onValueChange = { viewModel.updateFontSize(it) },
-                            valueRange = 13f..24f,
-                            steps = 10,
-                            colors = SliderDefaults.colors(
-                                thumbColor = MaterialTheme.colorScheme.primary,
-                                activeTrackColor = MaterialTheme.colorScheme.primary,
-                                inactiveTrackColor = MaterialTheme.colorScheme.primaryContainer
-                            )
+                        Text(
+                            if (com.example.data.remote.AuthorProfiles.isOfficial(current.authorAvatarUrl)) "যাচাইকৃত লেখক • নিংশিং চে" else "লেখক • নিংশিং চে",
+                            fontFamily = Kalpurush,
+                            fontSize = 13.sp,
+                            color = PortalSaffron
                         )
                     }
-
-                    // Line Spacing Slider
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = "লাইনের ফাঁক",
-                                style = MaterialTheme.typography.labelMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            )
-                            Text(
-                                text = String.format("%.1fx", preferences.lineSpacingMultiplier),
-                                style = MaterialTheme.typography.labelMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            )
-                        }
-
-                        Slider(
-                            value = preferences.lineSpacingMultiplier,
-                            onValueChange = { viewModel.updateLineSpacing(it) },
-                            valueRange = 1.3f..2.2f,
-                            steps = 8,
-                            colors = SliderDefaults.colors(
-                                thumbColor = MaterialTheme.colorScheme.primary,
-                                activeTrackColor = MaterialTheme.colorScheme.primary,
-                                inactiveTrackColor = MaterialTheme.colorScheme.primaryContainer
-                            )
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
                 }
+            }
+            if (current.featuredImageUrl.isNotBlank()) {
+                item {
+                    AsyncImage(
+                        model = current.featuredImageUrl,
+                        contentDescription = current.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(16f / 10f)
+                            .clip(RoundedCornerShape(8.dp))
+                    )
+                }
+            }
+
+            items(blocks.size) { index ->
+                val (kind, value) = blocks[index]
+                if (kind == "img") {
+                    AsyncImage(
+                        model = value,
+                        contentDescription = null,
+                        contentScale = ContentScale.FillWidth,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(6.dp))
+                    )
+                } else {
+                    Text(
+                        text = value,
+                        fontFamily = Kalpurush,
+                        color = scheme.onBackground,
+                        fontSize = preferences.fontSizeSp.sp,
+                        lineHeight = (preferences.fontSizeSp * preferences.lineSpacingMultiplier).sp,
+                        textAlign = TextAlign.Justify
+                    )
+                }
+            }
+
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        "Facebook",
+                        color = PortalSaffron,
+                        fontFamily = Kalpurush,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clickable {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse("https://www.facebook.com/sharer/sharer.php?u=${Uri.encode(current.sourceUrl)}"))
+                            )
+                        }
+                    )
+                    Text(
+                        "WhatsApp",
+                        color = PortalSaffron,
+                        fontFamily = Kalpurush,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clickable {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse("https://api.whatsapp.com/send?text=${Uri.encode(current.title + " " + current.sourceUrl)}"))
+                            )
+                        }
+                    )
+                    Row(
+                        modifier = Modifier.clickable {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(current.sourceUrl)))
+                        },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.OpenInNew, null, tint = PortalSaffron, modifier = Modifier.size(14.dp))
+                        Text("  মূল পাতা", color = PortalSaffron, fontFamily = Kalpurush, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            if (relatedArticles.isNotEmpty()) {
+                item {
+                    Text("নুয়া / মান্নাপা লেখা", fontFamily = Kalpurush, fontWeight = FontWeight.Bold, fontSize = 20.sp, color = scheme.secondary)
+                }
+                items(relatedArticles) { rel ->
+                    ArticleListItemCard(rel, onClick = { onRelatedArticleClick(rel.id) })
+                }
+            }
+
+            item {
+                Text("হাব্বি মন্তব্যহানি", fontFamily = Kalpurush, fontWeight = FontWeight.Bold, fontSize = 22.sp, color = scheme.secondary)
+            }
+            if (comments.isEmpty()) {
+                item {
+                    Text("কোন মন্তব্য নেইসে।", fontFamily = Kalpurush, fontSize = 18.sp, color = scheme.onSurfaceVariant)
+                }
+            } else {
+                items(comments) { item ->
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = scheme.surface,
+                        border = BorderStroke(1.dp, scheme.outline),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(item.name, fontFamily = Kalpurush, fontWeight = FontWeight.Bold, color = PortalSaffron)
+                            Text(item.content, fontFamily = Kalpurush, fontSize = 15.sp, lineHeight = 24.sp, color = scheme.onSurface)
+                        }
+                    }
+                }
+            }
+
+            item {
+                Text("মন্তব্য করিক", fontFamily = Kalpurush, fontWeight = FontWeight.Bold, fontSize = 22.sp, color = scheme.secondary)
+            }
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(name, { name = it }, label = { Text("নাঙহান *", fontFamily = Kalpurush) }, modifier = Modifier.fillMaxWidth(), colors = fieldColors)
+                    OutlinedTextField(address, { address = it }, label = { Text("ঠিকানাহান", fontFamily = Kalpurush) }, modifier = Modifier.fillMaxWidth(), colors = fieldColors)
+                    OutlinedTextField(email, { email = it }, label = { Text("ইমেইল *", fontFamily = Kalpurush) }, modifier = Modifier.fillMaxWidth(), colors = fieldColors, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
+                    OutlinedTextField(phone, { phone = it }, label = { Text("ফোন নম্বর", fontFamily = Kalpurush) }, modifier = Modifier.fillMaxWidth(), colors = fieldColors, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone))
+                    OutlinedTextField(
+                        comment,
+                        { comment = it },
+                        label = { Text("মন্তব্য *", fontFamily = Kalpurush) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(140.dp),
+                        colors = fieldColors
+                    )
+                    if (!commentStatus.isNullOrBlank()) {
+                        Text(commentStatus.orEmpty(), fontFamily = Kalpurush, color = PortalSaffron, fontSize = 14.sp)
+                    }
+                    Button(
+                        onClick = { viewModel.submitComment(name, address, email, phone, comment) },
+                        enabled = !submitting,
+                        colors = ButtonDefaults.buttonColors(containerColor = PortalSaffron),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        if (submitting) CircularProgressIndicator(modifier = Modifier.size(16.dp), color = androidx.compose.ui.graphics.Color.White, strokeWidth = 2.dp)
+                        else Text("মন্তব্য পাঠুইক", fontFamily = Kalpurush, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+            item { Spacer(Modifier.height(28.dp)) }
+        }
+    }
+
+    if (showType) {
+        ModalBottomSheet(onDismissRequest = { showType = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = scheme.surface) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("অক্ষরের আকার", fontFamily = Kalpurush, fontWeight = FontWeight.Bold, color = PortalSaffron)
+                Slider(
+                    value = preferences.fontSizeSp,
+                    onValueChange = { viewModel.updateFontSize(it) },
+                    valueRange = 14f..26f,
+                    colors = SliderDefaults.colors(thumbColor = PortalSaffron, activeTrackColor = PortalSaffron)
+                )
+                Text("লাইনের ফাঁক", fontFamily = Kalpurush, fontWeight = FontWeight.Bold, color = PortalSaffron)
+                Slider(
+                    value = preferences.lineSpacingMultiplier,
+                    onValueChange = { viewModel.updateLineSpacing(it) },
+                    valueRange = 1.3f..2.2f,
+                    colors = SliderDefaults.colors(thumbColor = PortalSaffron, activeTrackColor = PortalSaffron)
+                )
+                Spacer(Modifier.height(12.dp))
             }
         }
     }
