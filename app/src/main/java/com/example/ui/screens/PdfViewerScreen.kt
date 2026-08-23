@@ -9,53 +9,38 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.NavigateBefore
 import androidx.compose.material.icons.filled.NavigateNext
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -63,18 +48,16 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.components.ArticleReaderSkeleton
 import com.example.ui.components.PdfViewerSkeletonLayout
+import com.example.ui.theme.Kalpurush
+import com.example.ui.theme.PortalSaffron
 import com.example.ui.viewmodel.PdfViewerViewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PdfViewerScreen(
     pdfId: String,
@@ -84,15 +67,7 @@ fun PdfViewerScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(pdfId) {
-        viewModel.loadPdf(pdfId)
-    }
-
-    var isSkeletonLoading by remember(pdfId) { mutableStateOf(true) }
-    LaunchedEffect(pdfId) {
-        delay(1000L) // Minimum 1 second skeleton view
-        isSkeletonLoading = false
-    }
+    LaunchedEffect(pdfId) { viewModel.loadPdf(pdfId) }
 
     val pdfDocument by viewModel.pdfDocument.collectAsState()
     val pages by viewModel.pages.collectAsState()
@@ -106,262 +81,151 @@ fun PdfViewerScreen(
         }
     }
 
-    val pageCount = if (pages.isNotEmpty()) pages.size else (pdfDocument?.pageCount ?: 1)
+    val pageCount = if (pages.isNotEmpty()) pages.size else 1
     val pagerState = rememberPagerState(initialPage = 0, pageCount = { pageCount })
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(
-                            text = pdfDocument?.title ?: "PDF পাঠক",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontFamily = FontFamily.Serif,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onBackground,
-                                fontSize = 15.sp
-                            ),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = if (pages.isNotEmpty()) {
-                                "পৃষ্ঠা ${pagerState.currentPage + 1} / $pageCount • ${pdfDocument?.edition ?: ""}"
-                            } else {
-                                "${pdfDocument?.edition ?: ""} • ${pdfDocument?.year ?: ""}"
-                            },
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        )
-                    }
-                },
-                navigationIcon = {
-                    IconButton(
-                        onClick = onNavigateBack,
-                        modifier = Modifier.testTag("pdf_viewer_back_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = MaterialTheme.colorScheme.onBackground
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(
-                        onClick = { viewModel.sharePdf() },
-                        modifier = Modifier.testTag("pdf_share_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Share,
-                            contentDescription = "Share PDF",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-
-                    IconButton(
-                        onClick = { viewModel.downloadPdf() },
-                        modifier = Modifier.testTag("pdf_download_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Download,
-                            contentDescription = "Download PDF",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Brush.verticalGradient(listOf(Color(0xFF140A07), Color(0xFF2B1610), Color(0xFF0E0705))))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 6.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onNavigateBack, modifier = Modifier.testTag("pdf_viewer_back_button")) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color(0xFFFFF3D6))
+            }
+            Column(Modifier.weight(1f)) {
+                Text(
+                    pdfDocument?.title ?: "গ্রন্থাগার",
+                    fontFamily = Kalpurush,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFFFF3D6),
+                    fontSize = 16.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-            )
-        },
-        bottomBar = {
-            if (pages.isNotEmpty()) {
-                Surface(
-                    color = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 6.dp,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(1.dp, MaterialTheme.colorScheme.outline)
-                ) {
-                    Column(
+                Text(
+                    if (pages.isNotEmpty()) "পৃষ্ঠা ${pagerState.currentPage + 1} / $pageCount" else (pdfDocument?.edition ?: ""),
+                    fontFamily = Kalpurush,
+                    color = PortalSaffron,
+                    fontSize = 12.sp
+                )
+            }
+            IconButton(onClick = { viewModel.sharePdf() }) {
+                Icon(Icons.Default.Share, contentDescription = "Share", tint = PortalSaffron)
+            }
+            IconButton(onClick = { viewModel.downloadPdf() }) {
+                Icon(Icons.Default.Download, contentDescription = "Download", tint = PortalSaffron)
+            }
+        }
+
+        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            when {
+                isLoading -> PdfViewerSkeletonLayout()
+                pages.isEmpty() -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Default.PictureAsPdf, null, tint = PortalSaffron, modifier = Modifier.size(56.dp))
+                    Text("বইটি খোলা যায়নি", fontFamily = Kalpurush, color = Color(0xFFFFF3D6))
+                }
+                else -> HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { pageIndex ->
+                    var scale by remember { mutableFloatStateOf(1f) }
+                    var offsetX by remember { mutableFloatStateOf(0f) }
+                    var offsetY by remember { mutableFloatStateOf(0f) }
+                    Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                            .fillMaxSize()
+                            .padding(horizontal = 18.dp, vertical = 10.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            IconButton(
-                                onClick = {
-                                    if (pagerState.currentPage > 0) {
-                                        scope.launch {
-                                            pagerState.animateScrollToPage(pagerState.currentPage - 1)
-                                        }
-                                    }
-                                },
-                                enabled = pagerState.currentPage > 0,
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.NavigateBefore,
-                                    contentDescription = "Previous Page",
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
-
-                            Text(
-                                text = "পৃষ্ঠা ${pagerState.currentPage + 1} / $pageCount",
-                                style = MaterialTheme.typography.labelMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            )
-
-                            IconButton(
-                                onClick = {
-                                    if (pagerState.currentPage < pageCount - 1) {
-                                        scope.launch {
-                                            pagerState.animateScrollToPage(pagerState.currentPage + 1)
-                                        }
-                                    }
-                                },
-                                enabled = pagerState.currentPage < pageCount - 1,
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.NavigateNext,
-                                    contentDescription = "Next Page",
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-
-                        if (pageCount > 1) {
-                            Slider(
-                                value = (pagerState.currentPage).toFloat(),
-                                onValueChange = { value ->
-                                    scope.launch {
-                                        pagerState.scrollToPage(value.toInt())
-                                    }
-                                },
-                                valueRange = 0f..(pageCount - 1).toFloat(),
-                                steps = if (pageCount > 2) pageCount - 2 else 0,
-                                colors = SliderDefaults.colors(
-                                    thumbColor = MaterialTheme.colorScheme.primary,
-                                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                                    inactiveTrackColor = MaterialTheme.colorScheme.outline
-                                ),
-                                modifier = Modifier.height(24.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        containerColor = MaterialTheme.colorScheme.background
-    ) { paddingValues ->
-        if (isLoading || isSkeletonLoading) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-            ) {
-                PdfViewerSkeletonLayout()
-            }
-        } else if (pages.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.padding(24.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PictureAsPdf,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(64.dp)
-                    )
-                    Text(
-                        text = "PDF লোড করা সম্ভব হয়নি",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                    )
-                    Text(
-                        text = "অনুগ্রহ করে পুনরায় চেষ্টা করুন অথবা সরাসরি ডাউনলোড করুন।",
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    )
-                }
-            }
-        } else {
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .background(MaterialTheme.colorScheme.background)
-            ) { pageIndex ->
-                var scale by remember { mutableFloatStateOf(1f) }
-                var offsetX by remember { mutableFloatStateOf(0f) }
-                var offsetY by remember { mutableFloatStateOf(0f) }
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(12.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color.White)
-                        .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
-                        .pointerInput(Unit) {
-                            detectTransformGestures { _, pan, zoom, _ ->
-                                scale = (scale * zoom).coerceIn(1f, 3.5f)
-                                if (scale > 1f) {
-                                    offsetX += pan.x
-                                    offsetY += pan.y
-                                } else {
-                                    offsetX = 0f
-                                    offsetY = 0f
-                                }
-                            }
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (pageIndex < pages.size) {
-                        Image(
-                            bitmap = pages[pageIndex].asImageBitmap(),
-                            contentDescription = "PDF Page ${pageIndex + 1}",
-                            contentScale = ContentScale.Fit,
+                        Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .graphicsLayer(
-                                    scaleX = scale,
-                                    scaleY = scale,
-                                    translationX = offsetX,
-                                    translationY = offsetY
+                                .shadow(18.dp, RoundedCornerShape(2.dp))
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(Color(0xFFFFF8EC))
+                                .border(1.dp, Color(0xFFD7B48A), RoundedCornerShape(2.dp))
+                                .pointerInput(Unit) {
+                                    detectTransformGestures { _, pan, zoom, _ ->
+                                        scale = (scale * zoom).coerceIn(1f, 3.5f)
+                                        if (scale > 1f) {
+                                            offsetX += pan.x
+                                            offsetY += pan.y
+                                        } else {
+                                            offsetX = 0f
+                                            offsetY = 0f
+                                        }
+                                    }
+                                }
+                        ) {
+                            Box(
+                                Modifier
+                                    .align(Alignment.CenterStart)
+                                    .fillMaxWidth(0.03f)
+                                    .height(10000.dp)
+                                    .background(Brush.horizontalGradient(listOf(Color(0x332A140E), Color.Transparent)))
+                            )
+                            if (pageIndex < pages.size) {
+                                Image(
+                                    bitmap = pages[pageIndex].asImageBitmap(),
+                                    contentDescription = "পৃষ্ঠা ${pageIndex + 1}",
+                                    contentScale = ContentScale.Fit,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(10.dp)
+                                        .graphicsLayer(
+                                            scaleX = scale,
+                                            scaleY = scale,
+                                            translationX = offsetX,
+                                            translationY = offsetY
+                                        )
                                 )
-                        )
+                            }
+                        }
                     }
+                }
+            }
+        }
+
+        if (pages.isNotEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = {
+                        if (pagerState.currentPage > 0) scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
+                    },
+                    enabled = pagerState.currentPage > 0,
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF3B2418))
+                ) {
+                    Icon(Icons.Default.NavigateBefore, null, tint = PortalSaffron)
+                }
+                Text(
+                    "পৃষ্ঠা ${pagerState.currentPage + 1} / $pageCount",
+                    fontFamily = Kalpurush,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFFFF3D6)
+                )
+                IconButton(
+                    onClick = {
+                        if (pagerState.currentPage < pageCount - 1) scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+                    },
+                    enabled = pagerState.currentPage < pageCount - 1,
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF3B2418))
+                ) {
+                    Icon(Icons.Default.NavigateNext, null, tint = PortalSaffron)
                 }
             }
         }

@@ -219,18 +219,36 @@ fun ArticleReaderScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    AsyncImage(
-                        model = current.authorAvatarUrl,
-                        contentDescription = current.authorName,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(scheme.surfaceVariant)
-                    )
+                    Box {
+                        AsyncImage(
+                            model = current.authorAvatarUrl.ifBlank { com.example.data.repository.NinghsingCheContentData.APP_LOGO_URL },
+                            contentDescription = current.authorName,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(scheme.surfaceVariant)
+                        )
+                        if (com.example.data.remote.AuthorProfiles.isOfficial(current.authorAvatarUrl)) {
+                            com.example.ui.components.VerifiedBadge(
+                                modifier = Modifier.align(Alignment.BottomEnd),
+                                size = 16.dp
+                            )
+                        }
+                    }
                     Column {
-                        Text(current.authorName, fontFamily = Kalpurush, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = scheme.onSurface)
-                        Text("লেখক • নিংশিং চে", fontFamily = Kalpurush, fontSize = 13.sp, color = PortalSaffron)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(current.authorName, fontFamily = Kalpurush, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = scheme.onSurface)
+                            if (com.example.data.remote.AuthorProfiles.isOfficial(current.authorAvatarUrl)) {
+                                com.example.ui.components.VerifiedBadge(size = 15.dp)
+                            }
+                        }
+                        Text(
+                            if (com.example.data.remote.AuthorProfiles.isOfficial(current.authorAvatarUrl)) "যাচাইকৃত লেখক • নিংশিং চে" else "লেখক • নিংশিং চে",
+                            fontFamily = Kalpurush,
+                            fontSize = 13.sp,
+                            color = PortalSaffron
+                        )
                     }
                 }
             }

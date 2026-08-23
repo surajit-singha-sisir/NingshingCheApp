@@ -40,7 +40,8 @@ data class Author(
     val avatarUrl: String,
     val articleCount: Int,
     val location: String = "বাংলাদেশ / ভারত",
-    val topics: List<String> = emptyList()
+    val topics: List<String> = emptyList(),
+    val isVerified: Boolean = false
 )
 
 data class YearArchive(

@@ -224,6 +224,7 @@ class NingshingCheWebsiteClient {
         isFeatured: Boolean
     ): Article {
         val images = IMG_SRC.findAll(ctx).map { it.groupValues[1] }.toList()
+        val profileImage = images.firstOrNull { it.contains("/profiles/", ignoreCase = true) }.orEmpty()
         val image = images.firstOrNull { src ->
             val lower = src.lowercase()
             !lower.contains("logo") && !lower.contains("profile") && !lower.contains("avatar")
@@ -250,7 +251,7 @@ class NingshingCheWebsiteClient {
             featuredImageUrl = image,
             authorId = authorId,
             authorName = authorName,
-            authorAvatarUrl = authorAvatarFromName(authorName),
+            authorAvatarUrl = AuthorProfiles.resolve(authorName, profileImage),
             category = resolvedCategory.ifBlank { "সাহিত্য" },
             categorySlug = resolvedSlug.ifBlank { "literature" },
             tags = listOfNotNull(resolvedCategory.takeIf { it.isNotBlank() }, "নিংশিং চে ${toBengaliDigits(year)}"),
@@ -287,14 +288,17 @@ class NingshingCheWebsiteClient {
         val authorName = decode(AUTHOR_NAME.find(html)?.groupValues?.get(1).orEmpty()).ifBlank { "নিংশিং চে" }
         val authorHref = AUTHOR_HREF.find(html)?.groupValues?.get(1).orEmpty()
         val authorId = authorIdFromName(Uri.decode(authorHref.substringAfterLast('/').ifBlank { authorName }))
-        val authorAvatar = IMG_SRC.findAll(html).map { it.groupValues[1] }
-            .firstOrNull { it.contains("/profiles/", ignoreCase = true) }
-            .orEmpty()
-            .ifBlank { authorAvatarFromName(authorName) }
+        val authorAvatar = AuthorProfiles.resolve(
+            authorName,
+            IMG_SRC.findAll(html).map { it.groupValues[1] }
+                .firstOrNull { it.contains("/profiles/", ignoreCase = true) }
+                .orEmpty()
+        )
         val date = DATE_BN.find(html)?.value.orEmpty()
-        val bodyHtml = extractArticleBody(html)
-        val content = htmlToParagraphs(bodyHtml)
-        val excerpt = description.ifBlank { content.take(180) }
+        val content = htmlToPortalContent(html)
+        val excerpt = description.ifBlank {
+            contentBlocks(content).filter { it.first == "p" }.joinToString(" ") { it.second }.take(180)
+        }
         val minutes = ((content.length / 900) + 1).coerceIn(3, 25)
 
         return Article(
@@ -475,6 +479,9 @@ class NingshingCheWebsiteClient {
         private val TITLE_TAG = Regex("""<title[^>]*>([^<]+)</title>""", RegexOption.IGNORE_CASE)
         private val PDF_JS = Regex("""var\s+pdf\s*=\s*'([^']+)'""")
         private val PATH_PATTERN = Regex("""(?:https?://ningshingche\.com)?/?(20\d{2})/(\d{2})/([^/?#]+?\.kehem|[^/?#]+)""")
+        private val CSRF_TOKEN = Regex("""name=["']csrfmiddlewaretoken["'][^>]*value=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
+        private val BODY_TOKEN = Regex("""<(p)(\s[^>]*)?>([\s\S]*?)</p>|<(img)\b([^>]*)>""", RegexOption.IGNORE_CASE)
+        private val COMMENT_CARD = Regex("""<(?:div|article)[^>]*\bcomments\b[^>]*>([\s\S]*?)</(?:div|article)>""", RegexOption.IGNORE_CASE)
 
         fun encodePath(value: String): String =
             URLEncoder.encode(value, "UTF-8").replace("+", "%20")
@@ -650,10 +657,13 @@ class NingshingCheWebsiteClient {
                     name = first.authorName,
                     designation = "নিংশিং চে লেখক",
                     bio = "নিংশিং চে তথ্যকোষে প্রকাশিত লেখক। ${first.authorName} এর রচনাসমূহ ইতিহাস, সাহিত্য ও সংস্কৃতি বিষয়ে পাওয়া যায়।",
-                    avatarUrl = first.authorAvatarUrl,
+                    avatarUrl = AuthorProfiles.resolve(first.authorName, first.authorAvatarUrl),
                     articleCount = list.size,
                     location = "বাংলাদেশ / ভারত",
-                    topics = list.map { it.category }.distinct().take(4)
+                    topics = list.map { it.category }.distinct().take(4),
+                    isVerified = AuthorProfiles.isOfficial(
+                        AuthorProfiles.resolve(first.authorName, first.authorAvatarUrl)
+                    )
                 )
             }.sortedByDescending { it.articleCount }
         }

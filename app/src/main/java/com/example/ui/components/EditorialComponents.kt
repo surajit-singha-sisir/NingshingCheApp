@@ -789,7 +789,7 @@ fun AuthorCardItem(
         ) {
             Box {
                 AsyncImage(
-                    model = author.avatarUrl,
+                    model = author.avatarUrl.ifBlank { NinghsingCheContentData.APP_LOGO_URL },
                     contentDescription = author.name,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
@@ -797,34 +797,29 @@ fun AuthorCardItem(
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.primaryContainer)
                 )
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .size(18.dp)
-                        .align(Alignment.BottomEnd)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.EditNote,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(12.dp)
-                        )
-                    }
+                if (author.isVerified) {
+                    VerifiedBadge(modifier = Modifier.align(Alignment.BottomEnd), size = 18.dp)
                 }
             }
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = author.name,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontFamily = FontFamily.Serif,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontSize = 15.sp
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = author.name,
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontFamily = FontFamily.Serif,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = 15.sp
+                        )
                     )
-                )
+                    if (author.isVerified) {
+                        VerifiedBadge(size = 15.dp)
+                    }
+                }
                 Text(
                     text = author.designation,
                     style = MaterialTheme.typography.bodySmall.copy(
