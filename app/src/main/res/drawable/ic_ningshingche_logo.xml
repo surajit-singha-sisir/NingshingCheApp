@@ -1,0 +1,70 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="120dp"
+    android:height="120dp"
+    android:viewportWidth="120"
+    android:viewportHeight="120">
+    <!-- Top-Right Dark Grey Arcs (curving down) -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#1F2937"
+        android:strokeWidth="3.6"
+        android:strokeLineCap="round"
+        android:pathData="M 52,50 C 52,28 92,28 92,50" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#374151"
+        android:strokeWidth="3.6"
+        android:strokeLineCap="round"
+        android:pathData="M 59,50 C 59,34 85,34 85,50" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#6B7280"
+        android:strokeWidth="3.6"
+        android:strokeLineCap="round"
+        android:pathData="M 66,50 C 66,41 78,41 78,50" />
+
+    <!-- Bottom-Left Green Arcs (curving up) -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#15803D"
+        android:strokeWidth="3.6"
+        android:strokeLineCap="round"
+        android:pathData="M 68,52 C 68,74 28,74 28,52" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#22C55E"
+        android:strokeWidth="3.6"
+        android:strokeLineCap="round"
+        android:pathData="M 61,52 C 61,68 35,68 35,52" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#4ADE80"
+        android:strokeWidth="3.6"
+        android:strokeLineCap="round"
+        android:pathData="M 54,52 C 54,61 42,61 42,52" />
+
+    <!-- Bengali Glyph "নি" on bottom right -->
+    <!-- 'I-kar' stroke and loop on left -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#111827"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M 74,90 L 74,70 C 74,63 84,63 88,70" />
+    <!-- Horizontal headline (Matra) -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#111827"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M 70,70 L 92,70" />
+    <!-- 'Na' letter stem and loop -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#111827"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M 89,70 L 89,90 M 89,80 C 86,80 77,80 77,85 C 77,89 83,89 83,84 C 83,80 79,81 79,81" />
+</vector>
