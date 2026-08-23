@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -113,7 +112,10 @@ fun ArticleReaderScreen(
     }
 
     val current = article!!
-    val blocks = remember(current.content) { NingshingCheWebsiteClient.contentBlocks(current.content) }
+    val blocks = remember(current.content, current.featuredImageUrl) {
+        NingshingCheWebsiteClient.contentBlocks(current.content, current.featuredImageUrl)
+    }
+    val bodyHasHero = blocks.any { it.first == "img" }
     val scheme = MaterialTheme.colorScheme
     val fieldColors = OutlinedTextFieldDefaults.colors(
         focusedBorderColor = PortalSaffron,
@@ -252,15 +254,14 @@ fun ArticleReaderScreen(
                     }
                 }
             }
-            if (current.featuredImageUrl.isNotBlank()) {
+            if (!bodyHasHero && current.featuredImageUrl.isNotBlank()) {
                 item {
                     AsyncImage(
                         model = current.featuredImageUrl,
                         contentDescription = current.title,
-                        contentScale = ContentScale.Crop,
+                        contentScale = ContentScale.FillWidth,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .aspectRatio(16f / 10f)
                             .clip(RoundedCornerShape(8.dp))
                     )
                 }
@@ -273,9 +274,7 @@ fun ArticleReaderScreen(
                         model = value,
                         contentDescription = null,
                         contentScale = ContentScale.FillWidth,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(6.dp))
+                        modifier = Modifier.fillMaxWidth()
                     )
                 } else {
                     Text(

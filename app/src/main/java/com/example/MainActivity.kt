@@ -42,6 +42,7 @@ import com.example.ui.components.PortalTopBar
 import com.example.ui.navigation.Screen
 import com.example.ui.screens.AboutScreen
 import com.example.ui.screens.AiAssistantScreen
+import com.example.ui.screens.BlogSubmissionScreen
 import com.example.ui.screens.ArchiveYearDetailScreen
 import com.example.ui.screens.ArticleReaderScreen
 import com.example.ui.screens.AuthorDetailScreen
@@ -115,7 +116,11 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun NinghsingCheAppRoot(factory: ViewModelFactory) {
+fun NinghsingCheAppRoot(
+    factory: ViewModelFactory,
+    isDark: Boolean,
+    onToggleTheme: () -> Unit
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -152,7 +157,8 @@ fun NinghsingCheAppRoot(factory: ViewModelFactory) {
         Screen.Featured.route,
         Screen.About.route,
         Screen.SocialActivities.route,
-        Screen.AuthorsDirectory.route
+        Screen.AuthorsDirectory.route,
+        Screen.BlogSubmission.route
     )
 
     fun go(route: String) {
@@ -208,7 +214,6 @@ fun NinghsingCheAppRoot(factory: ViewModelFactory) {
                         isDark = isDark,
                         onMenuClick = { scope.launch { drawerState.open() } },
                         onSearchClick = { go(Screen.Search.route) },
-                        onAiClick = { navController.navigate(Screen.AiAssistant.route) },
                         onToggleTheme = onToggleTheme
                     )
                 }
@@ -286,14 +291,20 @@ fun NinghsingCheAppRoot(factory: ViewModelFactory) {
                             onSearchClick = {
                                 navController.navigate(Screen.Search.route)
                             },
-                            onAiClick = {
-                                navController.navigate(Screen.AiAssistant.route)
-                            },
                             onPdfArchiveClick = {
                                 navController.navigate(Screen.PdfArchive.route)
                             },
                             onSeeAllCategoriesClick = {
                                 navController.navigate(Screen.Explore.route)
+                            },
+                            onAuthorsClick = {
+                                navController.navigate(Screen.AuthorsDirectory.route)
+                            },
+                            onSubmitClick = {
+                                navController.navigate(Screen.BlogSubmission.route)
+                            },
+                            onFeaturedClick = {
+                                navController.navigate(Screen.Featured.route)
                             }
                         )
                     }
@@ -304,6 +315,9 @@ fun NinghsingCheAppRoot(factory: ViewModelFactory) {
                             viewModel = homeViewModel,
                             onArticleClick = { navController.navigate(Screen.ArticleDetail.createRoute(it)) }
                         )
+                    }
+                    composable(Screen.BlogSubmission.route) {
+                        BlogSubmissionScreen(viewModel = blogSubmissionViewModel)
                     }
                     composable(Screen.About.route) { AboutScreen() }
                     composable(Screen.SocialActivities.route) {

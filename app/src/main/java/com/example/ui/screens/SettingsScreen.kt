@@ -666,11 +666,11 @@ private fun ThemeModeCard(
     title: String,
     icon: ImageVector,
     isSelected: Boolean,
-    previewBg: androidx.compose.ui.graphics.Color,
-    previewFg: androidx.compose.ui.graphics.Color,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
+    val previewBg = MaterialTheme.colorScheme.surface
+    val previewFg = MaterialTheme.colorScheme.onSurface
     Surface(
         shape = RoundedCornerShape(14.dp),
         color = previewBg,

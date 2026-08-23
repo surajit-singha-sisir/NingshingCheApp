@@ -29,7 +29,8 @@ data class Category(
     val slug: String,
     val description: String,
     val articleCount: Int,
-    val iconName: String = "article"
+    val iconName: String = "article",
+    val imageUrl: String = ""
 )
 
 data class Author(
@@ -104,7 +105,7 @@ data class ReaderPreferences(
     val fontSizeSp: Float = 18f,
     val lineSpacingMultiplier: Float = 1.6f,
     val themeMode: ReaderThemeMode = ReaderThemeMode.PAPER,
-    val appThemeMode: AppThemeMode = AppThemeMode.SYSTEM,
+    val appThemeMode: AppThemeMode = AppThemeMode.LIGHT,
     val ttsSpeed: Float = 1.0f,
     val notificationNewArticles: Boolean = true,
     val notificationFeatured: Boolean = true

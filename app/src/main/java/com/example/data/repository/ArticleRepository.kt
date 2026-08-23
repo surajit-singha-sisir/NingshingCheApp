@@ -158,9 +158,7 @@ class ArticleRepository(
         val local = entity?.toModel()
             ?: NinghsingCheContentData.articles.find { it.id == key || it.slug == key }
 
-        val dirty = local?.content?.contains("article-content") == true ||
-            local?.content?.contains("id=\"") == true ||
-            local?.content?.contains("<p") == true
+        val dirty = local != null && NingshingCheWebsiteClient.looksDirty(local.content)
         val needsBody = local == null || local.content.isBlank() || local.content.length < 80 || dirty
         if (needsBody) {
             val remote = websiteClient.fetchArticle(local?.sourceUrl?.takeIf { it.contains(".kehem") } ?: idOrSlug)
@@ -226,6 +224,24 @@ class ArticleRepository(
 
     suspend fun loadComments(articleUrl: String): List<ArticleComment> =
         websiteClient.loadComments(articleUrl)
+
+    suspend fun submitBlog(
+        name: String,
+        facebook: String,
+        address: String,
+        email: String,
+        phone: String,
+        writerInfo: String,
+        articleTitle: String,
+        articleBody: String,
+        photoBytes: ByteArray?,
+        photoName: String,
+        fileBytes: ByteArray?,
+        fileName: String
+    ): Result<String> = websiteClient.submitBlog(
+        name, facebook, address, email, phone, writerInfo, articleTitle, articleBody,
+        photoBytes, photoName, fileBytes, fileName
+    )
 
     suspend fun submitComment(
         articleUrl: String,
@@ -335,7 +351,8 @@ class ArticleRepository(
         val existing = articleDao.getAllArticles().first().associateBy { it.id }
         val entities = articles.map { incoming ->
             val previous = existing[incoming.id] ?: existing.values.find { it.slug == incoming.slug }
-            if (previous != null && previous.content.length > incoming.content.length) {
+            val previousDirty = previous != null && NingshingCheWebsiteClient.looksDirty(previous.content)
+            if (previous != null && !previousDirty && previous.content.length > incoming.content.length) {
                 incoming.copy(
                     content = previous.content,
                     excerpt = incoming.excerpt.ifBlank { previous.excerpt },

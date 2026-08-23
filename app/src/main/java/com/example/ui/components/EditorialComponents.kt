@@ -446,7 +446,7 @@ fun FeaturedArticleHeroCard(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(16f / 10f)
+                .height(248.dp)
         ) {
             AsyncImage(
                 model = article.featuredImageUrl,

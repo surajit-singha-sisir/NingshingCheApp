@@ -3,7 +3,6 @@ package com.example.ui.components
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -16,7 +15,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Menu
@@ -44,7 +42,6 @@ fun PortalTopBar(
     isDark: Boolean,
     onMenuClick: () -> Unit,
     onSearchClick: () -> Unit,
-    onAiClick: () -> Unit,
     onToggleTheme: () -> Unit
 ) {
     val barColor by animateColorAsState(
@@ -117,16 +114,6 @@ fun PortalTopBar(
                     .testTag("search_button")
             ) {
                 Icon(Icons.Default.Search, contentDescription = "অনুসন্ধান", tint = iconTint)
-            }
-            IconButton(
-                onClick = onAiClick,
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .border(1.dp, PortalSaffron, CircleShape)
-                    .testTag("ai_assistant_button")
-            ) {
-                Icon(Icons.Default.AutoAwesome, contentDescription = "AI", tint = PortalSaffron)
             }
         }
     }

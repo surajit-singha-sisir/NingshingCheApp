@@ -34,6 +34,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -52,21 +53,19 @@ fun Modifier.shimmerEffect(
         label = "shimmer_anim"
     )
 
-    val isDark = MaterialTheme.colorScheme.surface.let {
-        MaterialTheme.colorScheme.background.red < 0.3f
-    }
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.4f
 
     val shimmerColors = if (isDark) {
         listOf(
-            Color(0xFF2A221C),
-            Color(0xFF45362C),
-            Color(0xFF2A221C)
+            Color(0xFF1F2937),
+            Color(0xFF374151),
+            Color(0xFF1F2937)
         )
     } else {
         listOf(
-            Color(0xFFF1E7E0),
-            Color(0xFFFAF4EE),
-            Color(0xFFF1E7E0)
+            Color(0xFFE5E7EB),
+            Color(0xFFF3F4F6),
+            Color(0xFFE5E7EB)
         )
     }
 
