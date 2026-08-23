@@ -16,3 +16,6 @@
 local.properties
 .env
 debug.keystore
+
+# Git Auto Commit Generator learned data
+.git-auto-commit/
