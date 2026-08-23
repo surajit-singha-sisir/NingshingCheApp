@@ -666,39 +666,35 @@ private fun ThemeModeCard(
     title: String,
     icon: ImageVector,
     isSelected: Boolean,
+    previewBg: androidx.compose.ui.graphics.Color,
+    previewFg: androidx.compose.ui.graphics.Color,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
-    val borderColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-    val bgColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
-    val contentColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-
     Surface(
         shape = RoundedCornerShape(14.dp),
-        color = bgColor,
-        border = BorderStroke(if (isSelected) 2.dp else 1.dp, borderColor),
+        color = previewBg,
+        border = BorderStroke(if (isSelected) 2.dp else 1.dp, if (isSelected) androidx.compose.ui.graphics.Color(0xFFFF8C00) else MaterialTheme.colorScheme.outline),
         modifier = modifier
             .clip(RoundedCornerShape(14.dp))
             .clickable { onClick() }
     ) {
         Column(
-            modifier = Modifier.padding(vertical = 12.dp, horizontal = 8.dp),
+            modifier = Modifier.padding(vertical = 14.dp, horizontal = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = title,
-                tint = contentColor,
+                tint = previewFg,
                 modifier = Modifier.size(24.dp)
             )
             Text(
                 text = title,
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                    color = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 11.sp
-                )
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                color = previewFg,
+                fontSize = 12.sp
             )
         }
     }

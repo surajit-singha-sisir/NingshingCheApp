@@ -29,7 +29,7 @@ class UserPreferencesRepository(private val context: Context) {
     }
 
     val readerPreferences: Flow<ReaderPreferences> = context.dataStore.data.map { preferences ->
-        val fontSize = preferences[Keys.FONT_SIZE] ?: 17f
+        val fontSize = preferences[Keys.FONT_SIZE] ?: 18f
         val lineSpacing = preferences[Keys.LINE_SPACING] ?: 1.6f
         val themeModeStr = preferences[Keys.THEME_MODE] ?: ReaderThemeMode.PAPER.name
         val themeMode = try {
@@ -37,7 +37,7 @@ class UserPreferencesRepository(private val context: Context) {
         } catch (_: Exception) {
             ReaderThemeMode.PAPER
         }
-        val appThemeModeStr = preferences[Keys.APP_THEME_MODE] ?: AppThemeMode.SYSTEM.name
+        val appThemeModeStr = preferences[Keys.APP_THEME_MODE] ?: AppThemeMode.LIGHT.name
         val appThemeMode = try {
             AppThemeMode.valueOf(appThemeModeStr)
         } catch (_: Exception) {

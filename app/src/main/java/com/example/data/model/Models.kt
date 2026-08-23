@@ -100,7 +100,7 @@ enum class AppThemeMode {
 }
 
 data class ReaderPreferences(
-    val fontSizeSp: Float = 17f,
+    val fontSizeSp: Float = 18f,
     val lineSpacingMultiplier: Float = 1.6f,
     val themeMode: ReaderThemeMode = ReaderThemeMode.PAPER,
     val appThemeMode: AppThemeMode = AppThemeMode.SYSTEM,

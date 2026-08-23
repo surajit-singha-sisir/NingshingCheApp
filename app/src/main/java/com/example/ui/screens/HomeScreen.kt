@@ -53,8 +53,6 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.delay
 import com.example.ui.components.ArticleListItemCard
 import com.example.ui.components.CategoryFilterChip
-import com.example.ui.components.EditorialTopHeader
-import com.example.ui.components.FeaturedArticleHeroCard
 import com.example.ui.components.HeroArticleCarousel
 import com.example.ui.components.HomeSkeletonLayout
 import com.example.ui.viewmodel.HomeViewModel
@@ -104,12 +102,6 @@ fun HomeScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        EditorialTopHeader(
-            onMenuClick = onMenuClick,
-            onSearchClick = onSearchClick,
-            onAiClick = onAiClick
-        )
-
         if (isSkeletonLoading || allArticles.isEmpty()) {
             HomeSkeletonLayout()
         } else {
