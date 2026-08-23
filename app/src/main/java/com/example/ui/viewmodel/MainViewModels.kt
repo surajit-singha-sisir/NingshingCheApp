@@ -10,6 +10,7 @@ import com.example.data.ai.NinghsingCheAiAssistant
 import com.example.data.model.AiChatMessage
 import com.example.data.model.AppThemeMode
 import com.example.data.model.Article
+import com.example.data.model.ArticleComment
 import com.example.data.model.Author
 import com.example.data.model.Bookmark
 import com.example.data.model.Category
@@ -190,6 +191,15 @@ class ReaderViewModel(
     private val _isBookmarked = MutableStateFlow(false)
     val isBookmarked: StateFlow<Boolean> = _isBookmarked.asStateFlow()
 
+    private val _comments = MutableStateFlow<List<ArticleComment>>(emptyList())
+    val comments: StateFlow<List<ArticleComment>> = _comments.asStateFlow()
+
+    private val _commentStatus = MutableStateFlow<String?>(null)
+    val commentStatus: StateFlow<String?> = _commentStatus.asStateFlow()
+
+    private val _isSubmittingComment = MutableStateFlow(false)
+    val isSubmittingComment: StateFlow<Boolean> = _isSubmittingComment.asStateFlow()
+
     val readerPreferences: StateFlow<ReaderPreferences> = preferencesRepository.readerPreferences
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ReaderPreferences())
 
@@ -236,9 +246,11 @@ class ReaderViewModel(
         viewModelScope.launch {
             val art = repository.getArticleById(articleId)
             _currentArticle.value = art
+            if (art != null && art.sourceUrl.contains("ningshingche.com")) {
+                _comments.value = repository.loadComments(art.sourceUrl)
+            }
 
             if (art != null) {
-                // Check bookmark status
                 repository.isBookmarked(art.id).collect { bookmarked ->
                     _isBookmarked.value = bookmarked
                 }

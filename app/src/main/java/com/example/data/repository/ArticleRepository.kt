@@ -6,6 +6,7 @@ import com.example.data.local.BookmarkEntity
 import com.example.data.local.HistoryEntity
 import com.example.data.local.SearchHistoryEntity
 import com.example.data.model.Article
+import com.example.data.model.ArticleComment
 import com.example.data.model.Author
 import com.example.data.model.Bookmark
 import com.example.data.model.Category
@@ -157,7 +158,10 @@ class ArticleRepository(
         val local = entity?.toModel()
             ?: NinghsingCheContentData.articles.find { it.id == key || it.slug == key }
 
-        val needsBody = local == null || local.content.isBlank() || local.content.length < 80
+        val dirty = local?.content?.contains("article-content") == true ||
+            local?.content?.contains("id=\"") == true ||
+            local?.content?.contains("<p") == true
+        val needsBody = local == null || local.content.isBlank() || local.content.length < 80 || dirty
         if (needsBody) {
             val remote = websiteClient.fetchArticle(local?.sourceUrl?.takeIf { it.contains(".kehem") } ?: idOrSlug)
                 ?: local?.sourceUrl?.let { websiteClient.fetchArticle(it) }
@@ -219,6 +223,18 @@ class ArticleRepository(
             )
         }
     }
+
+    suspend fun loadComments(articleUrl: String): List<ArticleComment> =
+        websiteClient.loadComments(articleUrl)
+
+    suspend fun submitComment(
+        articleUrl: String,
+        name: String,
+        address: String,
+        email: String,
+        phone: String,
+        content: String
+    ): Result<String> = websiteClient.submitComment(articleUrl, name, address, email, phone, content)
 
     fun getCategories(): List<Category> = _categories.value
 

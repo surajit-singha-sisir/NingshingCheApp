@@ -11,9 +11,15 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
+import com.example.data.model.ArticleComment
+import okhttp3.Cookie
+import okhttp3.CookieJar
+import okhttp3.FormBody
+import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.net.URLEncoder
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
 
@@ -31,11 +37,21 @@ data class WebsiteListing(
  */
 class NingshingCheWebsiteClient {
 
+    private val cookieStore = ConcurrentHashMap<String, List<Cookie>>()
     private val http = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .followRedirects(true)
         .followSslRedirects(true)
+        .cookieJar(object : CookieJar {
+            override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+                cookieStore[url.host] = cookies
+            }
+
+            override fun loadForRequest(url: HttpUrl): List<Cookie> {
+                return cookieStore[url.host].orEmpty()
+            }
+        })
         .build()
 
     suspend fun syncCatalog(): Result<WebsiteListing> = withContext(Dispatchers.IO) {
@@ -305,13 +321,45 @@ class NingshingCheWebsiteClient {
         )
     }
 
-    private fun extractArticleBody(html: String): String {
-        val article = ARTICLE_BLOCK.find(html)?.groupValues?.get(1) ?: html
-        val start = article.indexOf("id=\"article-content\"")
-        val body = if (start >= 0) article.substring(start) else article
-        val cutPoints = listOf("শেয়ার করিক", "Share on", "সম্পর্কিত লেখা", "id=\"comments\"")
-        val cut = cutPoints.map { body.indexOf(it) }.filter { it > 200 }.minOrNull()
-        return if (cut != null) body.substring(0, cut) else body
+    suspend fun loadComments(articleUrl: String): List<ArticleComment> = withContext(Dispatchers.IO) {
+        val html = get(articleUrl) ?: return@withContext emptyList()
+        parseComments(html)
+    }
+
+    suspend fun submitComment(
+        articleUrl: String,
+        name: String,
+        address: String,
+        email: String,
+        phone: String,
+        content: String
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val page = get(articleUrl) ?: return@withContext Result.failure(Exception("পৃষ্ঠা খোলা যায়নি"))
+            val csrf = CSRF_TOKEN.find(page)?.groupValues?.get(1).orEmpty()
+            if (csrf.isBlank()) return@withContext Result.failure(Exception("ফর্ম টোকেন পাওয়া যায়নি"))
+            val body = FormBody.Builder()
+                .add("csrfmiddlewaretoken", csrf)
+                .add("name", name.trim())
+                .add("address", address.trim().ifBlank { "বাংলাদেশ" })
+                .add("email", email.trim())
+                .add("phone", phone.trim())
+                .add("content", content.trim())
+                .build()
+            val request = Request.Builder()
+                .url(articleUrl)
+                .header("User-Agent", USER_AGENT)
+                .header("Referer", articleUrl)
+                .header("Origin", SITE)
+                .post(body)
+                .build()
+            http.newCall(request).execute().use { response ->
+                if (response.isSuccessful) Result.success("মন্তব্য পাঠানি ইল। পর্যালোচনার পর প্রকাশ অইতই।")
+                else Result.failure(Exception("সার্ভার জবাব: ${response.code}"))
+            }
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
     }
 
     private fun parsePdfPage(html: String, id: Int): PdfDocument? {
@@ -498,18 +546,66 @@ class NingshingCheWebsiteClient {
 
         fun stripTags(html: String): String = html.replace(Regex("""<[^>]+>"""), " ")
 
-        fun htmlToParagraphs(html: String): String {
-            var text = html
-                .replace(Regex("""<(script|style)[\s\S]*?</\1>""", RegexOption.IGNORE_CASE), " ")
-                .replace(Regex("""</p>""", RegexOption.IGNORE_CASE), "\n\n")
-                .replace(Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE), "\n")
-                .replace(Regex("""</(div|h1|h2|h3|li|tr)>""", RegexOption.IGNORE_CASE), "\n")
-                .replace(Regex("""<[^>]+>"""), " ")
-            text = decode(text)
-            return text
-                .replace(Regex("""[ \t]+\n"""), "\n")
-                .replace(Regex("""\n{3,}"""), "\n\n")
-                .trim()
+        fun htmlToParagraphs(html: String): String = htmlToPortalContent(html)
+
+        fun htmlToPortalContent(fullHtml: String): String {
+            val article = ARTICLE_BLOCK.find(fullHtml)?.groupValues?.get(1) ?: fullHtml
+            val cutAt = listOf("হাব্বি মন্তব্যহানি", "মন্তব্য করিক", "id=\"contactForm\"", "নুয়া লেখা")
+                .map { article.indexOf(it) }.filter { it > 80 }.minOrNull()
+            val body = if (cutAt != null) article.substring(0, cutAt) else article
+            val out = StringBuilder()
+            BODY_TOKEN.findAll(body).forEach { match ->
+                val isImage = match.groupValues[4].equals("img", ignoreCase = true)
+                if (isImage) {
+                    val attrs = match.groupValues[5]
+                    val src = Regex("""src=["']([^"']+)""").find(attrs)?.groupValues?.get(1).orEmpty()
+                    val lower = src.lowercase()
+                    if (src.isNotBlank() && !lower.contains("profile") && !lower.contains("logo") && !lower.contains("avatar")) {
+                        out.append("▣").append(src).append("\n\n")
+                    }
+                } else {
+                    val attrs = match.groupValues[2]
+                    if (attrs.contains("article-content")) return@forEach
+                    val inner = match.groupValues[3]
+                        .replace(Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE), "\n")
+                    val text = decode(stripTags(inner))
+                    if (text.isNotBlank()) out.append("¶").append(text).append("\n\n")
+                }
+            }
+            return out.toString().trim()
+        }
+
+        fun contentBlocks(content: String): List<Pair<String, String>> {
+            if (content.contains("article-content") || content.contains("<p") || content.contains("id=")) {
+                val cleaned = decode(stripTags(content.replace(Regex("""id=["']article-content["'][^<]*"""), "")))
+                return cleaned.split(Regex("""\n{2,}""")).map { it.trim() }.filter { it.isNotBlank() }.map { "p" to it }
+            }
+            if (content.contains("¶") || content.contains("▣")) {
+                return content.split(Regex("""\n{2,}""")).mapNotNull { chunk ->
+                    val line = chunk.trim()
+                    when {
+                        line.startsWith("▣") -> "img" to line.removePrefix("▣").trim()
+                        line.startsWith("¶") -> "p" to line.removePrefix("¶").trim()
+                        line.isNotBlank() -> "p" to line
+                        else -> null
+                    }
+                }
+            }
+            return content.split(Regex("""\n{2,}""")).map { it.trim() }.filter { it.isNotBlank() }.map { "p" to it }
+        }
+
+        fun parseComments(html: String): List<ArticleComment> {
+            val cards = COMMENT_CARD.findAll(html).map { it.groupValues[1] }.toList()
+            return cards.mapNotNull { card ->
+                val text = decode(stripTags(Regex("""class=["'][^"']*comment-text[^"']*["'][^>]*>([\s\S]*?)<""", RegexOption.IGNORE_CASE).find(card)?.groupValues?.get(1) ?: ""))
+                    .ifBlank { decode(stripTags(card)) }
+                val name = decode(
+                    Regex("""class=["'][^"']*(?:font-bold|font-semibold|author)[^"']*["'][^>]*>([^<]+)""", RegexOption.IGNORE_CASE)
+                        .find(card)?.groupValues?.get(1).orEmpty()
+                ).ifBlank { "পাঠক" }
+                if (text.isBlank() || text.contains("কোন মন্তব্য")) null
+                else ArticleComment(name = name, content = text)
+            }
         }
 
         fun joinPage(baseUrl: String, page: Int): String {

@@ -117,6 +117,12 @@ data class ArticleCitation(
     val snippet: String
 )
 
+data class ArticleComment(
+    val name: String,
+    val content: String,
+    val meta: String = ""
+)
+
 data class AiChatMessage(
     val id: String,
     val text: String,
