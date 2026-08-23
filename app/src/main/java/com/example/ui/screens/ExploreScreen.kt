@@ -67,6 +67,9 @@ fun ExploreScreen(
 ) {
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
     val allArticles by viewModel.allArticles.collectAsStateWithLifecycle()
+    val categories by viewModel.categories.collectAsStateWithLifecycle()
+    val authors by viewModel.authors.collectAsStateWithLifecycle()
+    val yearArchives by viewModel.yearArchives.collectAsStateWithLifecycle()
 
     var isSkeletonLoading by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) {
@@ -188,7 +191,7 @@ fun ExploreScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.testTag("explore_categories_list")
                 ) {
-                    items(viewModel.categories) { category ->
+                    items(categories) { category ->
                         CategoryDetailedCard(
                             category = category,
                             onClick = { onCategoryClick(category.slug) }
@@ -204,7 +207,7 @@ fun ExploreScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.testTag("explore_authors_list")
                 ) {
-                    items(viewModel.authors) { author ->
+                    items(authors) { author ->
                         AuthorCardItem(
                             author = author,
                             onClick = { onAuthorClick(author.id) }
@@ -220,7 +223,7 @@ fun ExploreScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.testTag("explore_archives_list")
                 ) {
-                    items(viewModel.yearArchives) { yearArchive ->
+                    items(yearArchives) { yearArchive ->
                         YearArchiveTimelineCard(
                             archive = yearArchive,
                             onClick = { onArchiveClick(yearArchive.year) }

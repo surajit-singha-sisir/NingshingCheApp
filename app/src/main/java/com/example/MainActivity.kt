@@ -374,6 +374,40 @@ fun NinghsingCheAppRoot(factory: ViewModelFactory) {
 
                     // Article Reader Screen with Deep Links
                     composable(
+                        route = "web_article/{year}/{month}/{slug}",
+                        arguments = listOf(
+                            navArgument("year") { type = NavType.StringType },
+                            navArgument("month") { type = NavType.StringType },
+                            navArgument("slug") { type = NavType.StringType }
+                        ),
+                        deepLinks = listOf(
+                            navDeepLink { uriPattern = "https://ningshingche.com/{year}/{month}/{slug}" },
+                            navDeepLink { uriPattern = "http://ningshingche.com/{year}/{month}/{slug}" }
+                        )
+                    ) { backStackEntry ->
+                        val year = backStackEntry.arguments?.getString("year").orEmpty()
+                        val month = backStackEntry.arguments?.getString("month").orEmpty()
+                        val slug = backStackEntry.arguments?.getString("slug").orEmpty()
+                            .removeSuffix(".kehem")
+                        val articleId = if (year.isNotBlank() && month.isNotBlank()) {
+                            "$year/$month/$slug"
+                        } else {
+                            slug.ifBlank { "art-1" }
+                        }
+                        ArticleReaderScreen(
+                            articleId = articleId,
+                            viewModel = readerViewModel,
+                            onBackClick = { navController.popBackStack() },
+                            onAuthorClick = { authorId ->
+                                navController.navigate(Screen.AuthorDetail.createRoute(authorId))
+                            },
+                            onRelatedArticleClick = { nextId ->
+                                navController.navigate(Screen.ArticleDetail.createRoute(nextId))
+                            }
+                        )
+                    }
+
+                    composable(
                         route = Screen.ArticleDetail.route,
                         arguments = listOf(navArgument("articleId") { type = NavType.StringType }),
                         deepLinks = listOf(
@@ -404,7 +438,8 @@ fun NinghsingCheAppRoot(factory: ViewModelFactory) {
                     ) { backStackEntry ->
                         val slug = backStackEntry.arguments?.getString("categorySlug") ?: ""
                         val allArticles by exploreViewModel.allArticles.collectAsStateWithLifecycle()
-                        val category = exploreViewModel.categories.find { it.slug == slug }
+                        val liveCategories by exploreViewModel.categories.collectAsStateWithLifecycle()
+                        val category = liveCategories.find { it.slug == slug }
                         val filteredArticles = allArticles.filter { it.categorySlug == slug }
 
                         CategoryDetailScreen(
@@ -424,7 +459,8 @@ fun NinghsingCheAppRoot(factory: ViewModelFactory) {
                     ) { backStackEntry ->
                         val authorId = backStackEntry.arguments?.getString("authorId") ?: ""
                         val allArticles by exploreViewModel.allArticles.collectAsStateWithLifecycle()
-                        val author = exploreViewModel.authors.find { it.id == authorId }
+                        val liveAuthors by exploreViewModel.authors.collectAsStateWithLifecycle()
+                        val author = liveAuthors.find { it.id == authorId }
                         val filteredArticles = allArticles.filter { it.authorId == authorId }
 
                         AuthorDetailScreen(
@@ -444,7 +480,8 @@ fun NinghsingCheAppRoot(factory: ViewModelFactory) {
                     ) { backStackEntry ->
                         val year = backStackEntry.arguments?.getInt("year") ?: 2025
                         val allArticles by exploreViewModel.allArticles.collectAsStateWithLifecycle()
-                        val yearArchive = exploreViewModel.yearArchives.find { it.year == year }
+                        val liveArchives by exploreViewModel.yearArchives.collectAsStateWithLifecycle()
+                        val yearArchive = liveArchives.find { it.year == year }
                         val filteredArticles = allArticles.filter { it.year == year }
 
                         ArchiveYearDetailScreen(

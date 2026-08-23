@@ -43,6 +43,12 @@ interface ArticleDao {
 
     @Query("DELETE FROM articles")
     suspend fun clearAll()
+
+    @Query("DELETE FROM articles WHERE id LIKE 'art-%'")
+    suspend fun deleteSeedArticles()
+
+    @Query("SELECT COUNT(*) FROM articles")
+    suspend fun countArticles(): Int
 }
 
 @Dao

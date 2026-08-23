@@ -132,14 +132,18 @@ import com.example.ui.navigation.Screen
  */
 fun getCategoryIcon(categorySlug: String): ImageVector {
     return when (categorySlug.lowercase()) {
-        "history-heritage", "history", "heritage" -> Icons.Default.AccountBalance
-        "literature-poetry", "literature", "poetry" -> Icons.Default.AutoStories
-        "language-grammar", "language", "grammar" -> Icons.Default.Translate
-        "culture-festivals", "culture", "festivals" -> Icons.Default.Celebration
-        "society-philosophy", "society", "philosophy" -> Icons.Default.Psychology
+        "history-heritage", "history", "heritage", "ইতিহাস" -> Icons.Default.AccountBalance
+        "literature-poetry", "literature", "poetry", "সাহিত্য", "কবিতা" -> Icons.Default.AutoStories
+        "language-grammar", "language", "grammar", "ইমার-ঠারর-এলা" -> Icons.Default.Translate
+        "culture-festivals", "culture", "festivals", "সংস্কৃতি" -> Icons.Default.Celebration
+        "society-philosophy", "society", "philosophy", "society-culture", "সমাজ-ও-সংস্কৃতি" -> Icons.Default.Psychology
         "arts-drama", "art", "arts", "drama" -> Icons.Default.Palette
-        "research-essays", "research", "essays" -> Icons.Default.Science
-        "biography-memoirs", "biography", "memoirs" -> Icons.Default.PersonPin
+        "research-essays", "research", "essays", "reviews", "পর্যালোচনা" -> Icons.Default.Science
+        "biography-memoirs", "biography", "memoirs", "reminiscence", "জীবনী", "স্মৃতিচারণ" -> Icons.Default.PersonPin
+        "editorial", "preface", "সম্পাদকীয়", "ভুমিকা" -> Icons.Default.EditNote
+        "mythology", "religion", "পৌরাণিক-কাহিনী", "ধর্ম" -> Icons.Default.AccountBalance
+        "science-technology", "বিজ্ঞান-ও-প্রযুক্তি" -> Icons.Default.Science
+        "news", "misc", "পৌ", "রকমারি" -> Icons.Default.MenuBook
         else -> Icons.Default.MenuBook
     }
 }

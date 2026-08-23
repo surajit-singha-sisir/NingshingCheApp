@@ -70,7 +70,7 @@ fun PdfArchiveScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val categories = viewModel.categories
+    val categories by viewModel.categories.collectAsState()
     val selectedCategory by viewModel.selectedCategoryId.collectAsState()
     val filteredPdfs by viewModel.filteredPdfs.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()

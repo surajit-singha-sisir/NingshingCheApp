@@ -47,7 +47,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
-import com.example.data.repository.NinghsingCheContentData
 import com.example.ui.components.ArticleListItemCard
 import com.example.ui.components.SearchSkeletonLayout
 import com.example.ui.viewmodel.SearchViewModel
@@ -63,6 +62,7 @@ fun SearchScreen(
     val recentSearches by viewModel.recentSearches.collectAsStateWithLifecycle()
     val selectedCategorySlug by viewModel.selectedCategorySlug.collectAsStateWithLifecycle()
     val selectedYear by viewModel.selectedYear.collectAsStateWithLifecycle()
+    val categories by viewModel.categories.collectAsStateWithLifecycle()
 
     var isSkeletonLoading by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) {

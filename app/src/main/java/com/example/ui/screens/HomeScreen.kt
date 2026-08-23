@@ -39,7 +39,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,6 +59,7 @@ import com.example.ui.components.HeroArticleCarousel
 import com.example.ui.components.HomeSkeletonLayout
 import com.example.ui.viewmodel.HomeViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
@@ -69,6 +76,9 @@ fun HomeScreen(
     val allArticles by viewModel.allArticles.collectAsStateWithLifecycle()
     val featuredArticles by viewModel.featuredArticles.collectAsStateWithLifecycle()
     val readingHistory by viewModel.readingHistory.collectAsStateWithLifecycle()
+    val categories by viewModel.categories.collectAsStateWithLifecycle()
+    val yearArchives by viewModel.yearArchives.collectAsStateWithLifecycle()
+    val syncState by viewModel.syncState.collectAsStateWithLifecycle()
 
     var isSkeletonLoading by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) {
@@ -103,6 +113,11 @@ fun HomeScreen(
         if (isSkeletonLoading || allArticles.isEmpty()) {
             HomeSkeletonLayout()
         } else {
+            PullToRefreshBox(
+                isRefreshing = syncState.isSyncing,
+                onRefresh = { viewModel.refreshFromWebsite() },
+                modifier = Modifier.fillMaxSize()
+            ) {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -110,6 +125,56 @@ fun HomeScreen(
                 contentPadding = PaddingValues(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
+                item {
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (syncState.isSyncing) Icons.Default.CloudSync else Icons.Default.CloudDone,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = when {
+                                    syncState.isSyncing -> "নিংশিংচে.কম থেকে হালনাগাদ হচ্ছে..."
+                                    syncState.usingLiveSite -> "লাইভ আর্কাইভ • ${allArticles.size}টি প্রবন্ধ"
+                                    else -> "অফলাইন আর্কাইভ • নিংশিংচে.কম সিঙ্ক করুন"
+                                },
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium
+                                ),
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(
+                                onClick = { viewModel.refreshFromWebsite() },
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .testTag("home_sync_refresh")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = "Sync",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
                 // 1. Featured Hero Carousel (min 3 articles)
                 if (heroArticles.isNotEmpty()) {
                     item {
@@ -392,7 +457,7 @@ fun HomeScreen(
                         contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(viewModel.categories) { category ->
+                        items(categories) { category ->
                             CategoryFilterChip(
                                 category = category,
                                 isSelected = false,
@@ -472,7 +537,7 @@ fun HomeScreen(
                         contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        items(viewModel.yearArchives) { yearArchive ->
+                        items(yearArchives) { yearArchive ->
                             Surface(
                                 shape = RoundedCornerShape(14.dp),
                                 color = MaterialTheme.colorScheme.surface,
@@ -550,7 +615,8 @@ fun HomeScreen(
                     }
                 }
             }
+            }
+            }
         }
     }
-}
 }
