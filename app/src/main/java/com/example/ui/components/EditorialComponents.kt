@@ -305,7 +305,7 @@ fun EditorialBottomNavBar(
             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f), RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
     ) {
         val items = listOf(
-            Triple(Screen.Home.route, "হোম", Icons.Default.Home),
+            Triple(Screen.Home.route, "ঘর", Icons.Default.Home),
             Triple(Screen.Explore.route, "অন্বেষণ", Icons.Default.Explore),
             Triple(Screen.PdfArchive.route, "PDF আর্কাইভ", Icons.Default.PictureAsPdf),
             Triple(Screen.Bookmarks.route, "সংরক্ষিত", Icons.Default.Bookmark)
@@ -620,8 +620,8 @@ fun ArticleListItemCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            AsyncImage(
-                model = article.featuredImageUrl,
+            PortalAsyncImage(
+                url = article.featuredImageUrl,
                 contentDescription = article.title,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
@@ -788,8 +788,8 @@ fun AuthorCardItem(
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Box {
-                AsyncImage(
-                    model = author.avatarUrl.ifBlank { NinghsingCheContentData.APP_LOGO_URL },
+                PortalAsyncImage(
+                    url = author.avatarUrl,
                     contentDescription = author.name,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier

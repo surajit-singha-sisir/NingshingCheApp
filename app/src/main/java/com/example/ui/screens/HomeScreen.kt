@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudDone
@@ -41,7 +42,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.components.AuthorRailCard
 import com.example.ui.components.CategoryImageTile
 import com.example.ui.components.FeaturedPortalCard
-import com.example.ui.components.HeroArticleCarousel
 import com.example.ui.components.HomeSkeletonLayout
 import com.example.ui.components.HorizontalCardsRow
 import com.example.ui.components.PdfBookRailCard
@@ -66,7 +66,8 @@ fun HomeScreen(
     onSeeAllCategoriesClick: () -> Unit,
     onAuthorsClick: () -> Unit,
     onSubmitClick: () -> Unit,
-    onFeaturedClick: () -> Unit
+    onFeaturedClick: () -> Unit,
+    onPdfClick: (String) -> Unit = onPdfArchiveClick
 ) {
     val allArticles by viewModel.allArticles.collectAsStateWithLifecycle()
     val featuredArticles by viewModel.featuredArticles.collectAsStateWithLifecycle()
@@ -76,15 +77,17 @@ fun HomeScreen(
     val syncState by viewModel.syncState.collectAsStateWithLifecycle()
 
     var isSkeletonLoading by remember { mutableStateOf(true) }
+    val listState = rememberLazyListState()
     LaunchedEffect(allArticles.size) {
         if (allArticles.isEmpty()) delay(900L)
         isSkeletonLoading = allArticles.isEmpty()
     }
-
-    val heroArticles = remember(featuredArticles, allArticles) {
-        val combined = (featuredArticles + allArticles).distinctBy { it.id }
-        combined.take(3)
+    LaunchedEffect(Unit) {
+        viewModel.scrollToTop.collect {
+            listState.animateScrollToItem(0)
+        }
     }
+
     val featuredRail = remember(featuredArticles, allArticles) {
         val list = featuredArticles.ifEmpty { allArticles.filter { it.isFeatured } }
         list.distinctBy { it.id }.take(6)
@@ -117,6 +120,7 @@ fun HomeScreen(
                 modifier = Modifier.fillMaxSize()
             ) {
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier
                         .fillMaxSize()
                         .testTag("home_screen_list"),
@@ -167,25 +171,14 @@ fun HomeScreen(
                         }
                     }
 
-                    if (heroArticles.isNotEmpty()) {
-                        item {
-                            Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                                HeroArticleCarousel(articles = heroArticles, onArticleClick = onArticleClick)
-                            }
-                        }
-                    }
-
                     if (featuredRail.isNotEmpty()) {
-                        item { PortalSectionHeader("ফিচার্ড আর্টিকেল", "সব দেখুন ›", onFeaturedClick) }
-                        item {
-                            HorizontalCardsRow {
-                                items(featuredRail, key = { it.id }) { article ->
-                                    FeaturedPortalCard(
-                                        article = article,
-                                        onClick = { onArticleClick(article.id) },
-                                        modifier = Modifier.fillParentMaxWidth(0.92f)
-                                    )
-                                }
+                        item { PortalSectionHeader("ফিচার্ড আর্টিকেল", "হাব্বি চেইক ›", onFeaturedClick) }
+                        items(featuredRail, key = { "feat-${it.id}" }) { article ->
+                            Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                                FeaturedPortalCard(
+                                    article = article,
+                                    onClick = { onArticleClick(article.id) }
+                                )
                             }
                         }
                     }
@@ -202,7 +195,7 @@ fun HomeScreen(
                     }
 
                     if (categories.isNotEmpty()) {
-                        item { PortalSectionHeader("জনপ্রিয় বিষয় ও বিভাগ", "সব দেখুন ›", onSeeAllCategoriesClick) }
+                        item { PortalSectionHeader("জনপ্রিয় বিষয় ও বিভাগ", "হাব্বি চেইক ›", onSeeAllCategoriesClick) }
                         item {
                             HorizontalCardsRow {
                                 items(categories, key = { it.slug }) { category ->
@@ -217,7 +210,7 @@ fun HomeScreen(
                     }
 
                     if (authors.isNotEmpty()) {
-                        item { PortalSectionHeader("আমার লেখক পারেঙ", "সব দেখুন ›", onAuthorsClick) }
+                        item { PortalSectionHeader("আমার লেখক পারেঙ", "হাব্বি চেইক ›", onAuthorsClick) }
                         item {
                             HorizontalCardsRow {
                                 items(authors.take(16), key = { it.id }) { author ->

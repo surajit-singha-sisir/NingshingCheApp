@@ -156,11 +156,39 @@ class NingshingCheWebsiteClient {
         return collected.values.toList()
     }
 
-    private suspend fun fetchPdfDocuments(): List<PdfDocument> = coroutineScope {
+    private suspend fun fetchPdfDocuments(covers: List<HomepagePdf>): List<PdfDocument> = coroutineScope {
+        val parsedCovers = covers.associateBy { it.readId }
         (1..6).map { id ->
             async {
-                val html = get("$SITE/read_pdf/$id") ?: return@async null
-                parsePdfPage(html, id)
+                val html = get("$SITE/read_pdf/$id")
+                val parsed = html?.let { parsePdfPage(it, id) }
+                val extra = parsedCovers[id]
+                val cover = extra?.cover?.takeIf { it.isNotBlank() }
+                    ?: PdfCovers.byReadId[id]
+                    ?: parsed?.coverImageUrl.orEmpty()
+                val title = extra?.title?.ifBlank { parsed?.title }.orEmpty().ifBlank { parsed?.title.orEmpty() }
+                parsed?.copy(
+                    title = title.ifBlank { parsed.title },
+                    coverImageUrl = cover,
+                    edition = extra?.date?.ifBlank { parsed.edition } ?: parsed.edition
+                ) ?: extra?.let {
+                    PdfDocument(
+                        id = "pdf-live-$id",
+                        title = it.title.ifBlank { "নিংশিং চে PDF $id" },
+                        edition = it.date,
+                        category = "বার্ষিক ও উৎসব সংখ্যা",
+                        categorySlug = "pdf-cat-annual",
+                        year = 0,
+                        authorOrEditor = "নিংশিং চে প্রকাশনা পর্ষদ",
+                        pageCount = 0,
+                        fileSizeMb = 0f,
+                        pdfUrl = "$SITE/read_pdf/$id",
+                        coverImageUrl = cover,
+                        description = "নিংশিংচে.কমত্ত সংগৃহীত লেরিক।",
+                        tags = listOf("নিংশিং চে", "PDF"),
+                        downloadUrl = "$SITE/read_pdf/$id"
+                    )
+                }
             }
         }.awaitAll().filterNotNull()
     }
@@ -655,7 +683,7 @@ class NingshingCheWebsiteClient {
             val end = html.indexOf("পিডিএফ(PDF) লেরিক")
             val section = if (start >= 0) html.substring(start, if (end > start) end else html.length) else return emptyList()
             val card = Regex(
-                """<img[^>]+src=["']([^"']+)["'][\s\S]{0,500}?<h4[^>]*>([^<]+)</h4>\s*<p[^>]*>([^<]*)</p>""",
+                """<img[^>]+src=["']([^"']+)["'][\s\S]{0,2500}?<h4[^>]*>([^<]+)</h4>\s*<p[^>]*>([^<]*)</p>""",
                 RegexOption.IGNORE_CASE
             )
             return card.findAll(section).map { match ->

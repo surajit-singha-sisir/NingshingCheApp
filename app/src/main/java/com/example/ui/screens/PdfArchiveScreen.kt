@@ -162,8 +162,8 @@ private fun LibraryBook(
                 .clip(RoundedCornerShape(4.dp))
                 .background(PortalMaroon)
         ) {
-            AsyncImage(
-                model = book.coverImageUrl,
+            com.example.ui.components.PortalAsyncImage(
+                url = book.coverImageUrl,
                 contentDescription = book.title,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()

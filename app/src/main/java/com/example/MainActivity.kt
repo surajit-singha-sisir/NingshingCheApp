@@ -14,6 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.MaterialTheme
@@ -162,15 +163,14 @@ fun NinghsingCheAppRoot(
     )
 
     fun go(route: String) {
-        scope.launch {
-            drawerState.close()
-            if (route != currentRoute) {
-                navController.navigate(route) {
-                    popUpTo(Screen.Home.route) { saveState = true }
-                    launchSingleTop = true
-                    restoreState = true
-                }
-            }
+        scope.launch { drawerState.close() }
+        if (route == Screen.Home.route) {
+            homeViewModel.requestScrollToTop()
+        }
+        navController.navigate(route) {
+            popUpTo(Screen.Home.route) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
         }
     }
 
@@ -207,7 +207,9 @@ fun NinghsingCheAppRoot(
         }
     ) {
         Scaffold(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .imePadding(),
             topBar = {
                 if (showPortalBar) {
                     PortalTopBar(
@@ -222,15 +224,7 @@ fun NinghsingCheAppRoot(
                 if (showBottomBar) {
                     EditorialBottomNavBar(
                         currentRoute = currentRoute,
-                        onNavigate = { route ->
-                            navController.navigate(route) {
-                                popUpTo(Screen.Home.route) {
-                                    saveState = true
-                                }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        }
+                        onNavigate = { go(it) }
                     )
                 }
             }
@@ -305,6 +299,9 @@ fun NinghsingCheAppRoot(
                             },
                             onFeaturedClick = {
                                 navController.navigate(Screen.Featured.route)
+                            },
+                            onPdfClick = { pdfId ->
+                                navController.navigate(Screen.PdfViewer.createRoute(pdfId))
                             }
                         )
                     }

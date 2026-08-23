@@ -25,9 +25,12 @@ import com.example.data.repository.ArticleRepository
 import com.example.data.repository.DashboardRepository
 import com.example.data.repository.WebsiteSyncState
 import com.example.ui.dashboard.DashboardViewModel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
@@ -63,6 +66,13 @@ class HomeViewModel(
 
     val readingHistory: StateFlow<List<ReadingHistory>> = repository.getReadingHistory()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _scrollToTop = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val scrollToTop: SharedFlow<Unit> = _scrollToTop.asSharedFlow()
+
+    fun requestScrollToTop() {
+        _scrollToTop.tryEmit(Unit)
+    }
 
     fun refreshFromWebsite() {
         viewModelScope.launch {

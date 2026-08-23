@@ -51,10 +51,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -64,9 +67,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImage
 import com.example.data.remote.NingshingCheWebsiteClient
 import com.example.ui.components.ArticleListItemCard
+import com.example.ui.components.PortalAsyncImage
 import com.example.ui.components.ArticleReaderSkeleton
 import com.example.ui.theme.Kalpurush
 import com.example.ui.theme.PortalSaffron
@@ -112,6 +115,8 @@ fun ArticleReaderScreen(
     }
 
     val current = article!!
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
     val blocks = remember(current.content, current.featuredImageUrl) {
         NingshingCheWebsiteClient.contentBlocks(current.content, current.featuredImageUrl)
     }
@@ -173,7 +178,7 @@ fun ArticleReaderScreen(
         }
 
         LazyColumn(
-            state = rememberLazyListState(),
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .testTag("article_reader_content"),
@@ -222,8 +227,8 @@ fun ArticleReaderScreen(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Box {
-                        AsyncImage(
-                            model = current.authorAvatarUrl.ifBlank { com.example.data.repository.NinghsingCheContentData.APP_LOGO_URL },
+                        PortalAsyncImage(
+                            url = current.authorAvatarUrl,
                             contentDescription = current.authorName,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier
@@ -256,8 +261,8 @@ fun ArticleReaderScreen(
             }
             if (!bodyHasHero && current.featuredImageUrl.isNotBlank()) {
                 item {
-                    AsyncImage(
-                        model = current.featuredImageUrl,
+                    PortalAsyncImage(
+                        url = current.featuredImageUrl,
                         contentDescription = current.title,
                         contentScale = ContentScale.FillWidth,
                         modifier = Modifier
@@ -270,8 +275,8 @@ fun ArticleReaderScreen(
             items(blocks.size) { index ->
                 val (kind, value) = blocks[index]
                 if (kind == "img") {
-                    AsyncImage(
-                        model = value,
+                    PortalAsyncImage(
+                        url = value,
                         contentDescription = null,
                         contentScale = ContentScale.FillWidth,
                         modifier = Modifier.fillMaxWidth()
@@ -361,7 +366,7 @@ fun ArticleReaderScreen(
             }
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedTextField(name, { name = it }, label = { Text("নাঙহান *", fontFamily = Kalpurush) }, modifier = Modifier.fillMaxWidth(), colors = fieldColors)
+                    OutlinedTextField(name, { name = it }, label = { Text("নাঙহান *", fontFamily = Kalpurush) }, modifier = Modifier.fillMaxWidth().onFocusChanged { if (it.isFocused) scope.launch { listState.animateScrollToItem(Int.MAX_VALUE) } }, colors = fieldColors)
                     OutlinedTextField(address, { address = it }, label = { Text("ঠিকানাহান", fontFamily = Kalpurush) }, modifier = Modifier.fillMaxWidth(), colors = fieldColors)
                     OutlinedTextField(email, { email = it }, label = { Text("ইমেইল *", fontFamily = Kalpurush) }, modifier = Modifier.fillMaxWidth(), colors = fieldColors, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
                     OutlinedTextField(phone, { phone = it }, label = { Text("ফোন নম্বর", fontFamily = Kalpurush) }, modifier = Modifier.fillMaxWidth(), colors = fieldColors, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone))
@@ -371,7 +376,12 @@ fun ArticleReaderScreen(
                         label = { Text("মন্তব্য *", fontFamily = Kalpurush) },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(140.dp),
+                            .height(140.dp)
+                            .onFocusChanged {
+                                if (it.isFocused) {
+                                    scope.launch { listState.animateScrollToItem(Int.MAX_VALUE) }
+                                }
+                            },
                         colors = fieldColors
                     )
                     if (!commentStatus.isNullOrBlank()) {

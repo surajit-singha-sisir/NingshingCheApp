@@ -37,12 +37,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import com.example.data.model.Article
 import com.example.data.model.Author
 import com.example.data.model.Category
 import com.example.data.model.PdfDocument
-import com.example.data.repository.NinghsingCheContentData
 import com.example.ui.theme.Kalpurush
 import com.example.ui.theme.PortalSaffron
 
@@ -92,31 +90,32 @@ fun FeaturedPortalCard(
         shadowElevation = 2.dp,
         modifier = modifier
             .fillMaxWidth()
-            .height(210.dp)
+            .height(292.dp)
             .clickable(onClick = onClick)
             .testTag("featured_portal_${article.id}")
     ) {
-        Row(modifier = Modifier.fillMaxSize()) {
-            AsyncImage(
-                model = article.featuredImageUrl,
+        Column(modifier = Modifier.fillMaxSize()) {
+            PortalAsyncImage(
+                url = article.featuredImageUrl,
                 contentDescription = article.title,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .fillMaxHeight()
-                    .weight(1.15f)
+                    .fillMaxWidth()
+                    .height(176.dp)
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             )
             Column(
                 modifier = Modifier
+                    .fillMaxWidth()
                     .weight(1f)
-                    .fillMaxHeight()
-                    .padding(12.dp),
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Surface(color = PortalSaffron, shape = RoundedCornerShape(50)) {
                             Text(
@@ -132,17 +131,19 @@ fun FeaturedPortalCard(
                             article.publishedDate,
                             fontFamily = Kalpurush,
                             fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                     Text(
                         text = article.title,
                         fontFamily = Kalpurush,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp,
-                        lineHeight = 22.sp,
+                        fontSize = 17.sp,
+                        lineHeight = 23.sp,
                         color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 3,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
@@ -170,21 +171,27 @@ fun SelectedEssayCard(
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
         shadowElevation = 1.dp,
         modifier = Modifier
-            .width(260.dp)
+            .width(248.dp)
+            .height(292.dp)
             .clickable(onClick = onClick)
             .testTag("selected_essay_${article.id}")
     ) {
-        Column {
-            AsyncImage(
-                model = article.featuredImageUrl,
+        Column(modifier = Modifier.fillMaxSize()) {
+            PortalAsyncImage(
+                url = article.featuredImageUrl,
                 contentDescription = article.title,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(148.dp)
+                    .height(156.dp)
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             )
-            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(
+                Modifier
+                    .weight(1f)
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
@@ -248,8 +255,8 @@ fun CategoryImageTile(
                     .fillMaxWidth()
                     .height(96.dp)
             ) {
-                AsyncImage(
-                    model = imageUrl.ifBlank { NinghsingCheContentData.APP_LOGO_URL },
+                PortalAsyncImage(
+                    url = imageUrl,
                     contentDescription = category.name,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
@@ -271,7 +278,7 @@ fun CategoryImageTile(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    "${category.articleCount}টি প্রবন্ধ",
+                    "${category.articleCount}গো লেখা",
                     fontFamily = Kalpurush,
                     fontSize = 11.sp,
                     color = PortalSaffron
@@ -353,16 +360,19 @@ fun PdfBookRailCard(
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
         modifier = Modifier
             .width(168.dp)
+            .height(268.dp)
             .clickable(onClick = onClick)
             .testTag("pdf_rail_${pdf.id}")
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            AsyncImage(
-                model = pdf.coverImageUrl.ifBlank { NinghsingCheContentData.APP_LOGO_URL },
+            PortalAsyncImage(
+                url = pdf.coverImageUrl,
                 contentDescription = pdf.title,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier

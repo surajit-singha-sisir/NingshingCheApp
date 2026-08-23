@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
+import com.example.data.repository.NinghsingCheContentData
 import com.example.ui.components.ArticleListItemCard
 import com.example.ui.components.SearchSkeletonLayout
 import com.example.ui.viewmodel.SearchViewModel
@@ -109,7 +110,7 @@ fun SearchScreen(
                     onValueChange = { viewModel.onQueryChange(it) },
                     placeholder = {
                         Text(
-                            text = "প্রবন্ধ, বিষয়, লেখক বা শব্দ দিয়ে খুঁজুন...",
+                            text = "লেখা, বিষয়, লেখক দিয়া বিসারিক...",
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                 fontSize = 14.sp

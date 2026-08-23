@@ -250,7 +250,7 @@ fun AiAssistantScreen(
                     onValueChange = { inputQuery = it },
                     placeholder = {
                         Text(
-                            text = "যেকোনো বিষয়ে প্রশ্ন লিখুন...",
+                            text = "কোন বিষয়র প্রশ্ন ইকিক...",
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                 fontSize = 13.sp
