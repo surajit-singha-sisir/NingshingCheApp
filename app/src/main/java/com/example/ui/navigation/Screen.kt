@@ -14,7 +14,6 @@ sealed class Screen(val route: String) {
     data object About : Screen("about")
     data object SocialActivities : Screen("social_activities")
     data object AuthorsDirectory : Screen("authors_directory")
-    data object BlogSubmission : Screen("blog_submission")
 
     data object PdfViewer : Screen("pdf_viewer/{pdfId}") {
         fun createRoute(pdfId: String) = "pdf_viewer/$pdfId"
@@ -85,25 +84,14 @@ object PortalNavigation {
         PortalNavItem(id = "cat-$slug", label = name, categorySlug = slug)
     }
 
-    val moreCategories = listOf(
-        "ভুমিকা" to "preface",
-        "সম্পাদকীয়" to "editorial",
-        "ইতিহাস" to "history",
-        "সাহিত্য" to "literature",
-        "সমাজ ও সংস্কৃতি" to "society-culture",
-        "পর্যালোচনা" to "reviews",
-        "জীবনী" to "biography",
-        "স্মৃতিচারণ" to "reminiscence",
-        "পৌরাণিক কাহিনী" to "mythology",
-        "বিজ্ঞান ও প্রযুক্তি" to "science-technology"
-    ).map { (name, slug) ->
-        PortalNavItem(id = "more-$slug", label = name, categorySlug = slug)
-    }
-
     val portal = listOf(
         PortalNavItem("about", "আমার সম্পর্কে", route = Screen.About.route),
         PortalNavItem("authors", "লেখক", route = Screen.AuthorsDirectory.route),
         PortalNavItem("social", "সামাজিক কার্যকলাপ", route = Screen.SocialActivities.route),
-        PortalNavItem("submit", "লেখা জমাদান", route = Screen.BlogSubmission.route)
+        PortalNavItem(
+            "submit",
+            "লেখা জমাদান",
+            externalUrl = "https://ningshingche.com/blog_submission"
+        )
     )
 }

@@ -92,7 +92,7 @@ class NinghsingCheAiAssistant(private val repository: ArticleRepository) {
         }
         return buildString {
             append("আপনার প্রশ্ন: “$query”\n\n")
-            append("$source-এর $archiveSizeটি প্রবন্ধ খুঁজে সবচেয়ে মিল থাকা লেখা: ${top.title}।\n\n")
+            append("$source-এর ${archiveSize}টি প্রবন্ধ খুঁজে সবচেয়ে মিল থাকা লেখা: ${top.title}।\n\n")
             if (snippet.isNotBlank()) {
                 append(snippet)
                 if (snippet.length >= 400) append("…")

@@ -14,7 +14,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.MaterialTheme
@@ -43,7 +42,6 @@ import com.example.ui.components.PortalTopBar
 import com.example.ui.navigation.Screen
 import com.example.ui.screens.AboutScreen
 import com.example.ui.screens.AiAssistantScreen
-import com.example.ui.screens.BlogSubmissionScreen
 import com.example.ui.screens.ArchiveYearDetailScreen
 import com.example.ui.screens.ArticleReaderScreen
 import com.example.ui.screens.AuthorDetailScreen
@@ -119,8 +117,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun NinghsingCheAppRoot(
     factory: ViewModelFactory,
-    isDark: Boolean,
-    onToggleTheme: () -> Unit
+    isDark: Boolean = false,
+    onToggleTheme: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -158,19 +156,19 @@ fun NinghsingCheAppRoot(
         Screen.Featured.route,
         Screen.About.route,
         Screen.SocialActivities.route,
-        Screen.AuthorsDirectory.route,
-        Screen.BlogSubmission.route
+        Screen.AuthorsDirectory.route
     )
 
     fun go(route: String) {
-        scope.launch { drawerState.close() }
-        if (route == Screen.Home.route) {
-            homeViewModel.requestScrollToTop()
-        }
-        navController.navigate(route) {
-            popUpTo(Screen.Home.route) { saveState = true }
-            launchSingleTop = true
-            restoreState = true
+        scope.launch {
+            drawerState.close()
+            if (route != currentRoute) {
+                navController.navigate(route) {
+                    popUpTo(Screen.Home.route) { saveState = true }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            }
         }
     }
 
@@ -207,15 +205,14 @@ fun NinghsingCheAppRoot(
         }
     ) {
         Scaffold(
-            modifier = Modifier
-                .fillMaxSize()
-                .imePadding(),
+            modifier = Modifier.fillMaxSize(),
             topBar = {
                 if (showPortalBar) {
                     PortalTopBar(
                         isDark = isDark,
                         onMenuClick = { scope.launch { drawerState.open() } },
                         onSearchClick = { go(Screen.Search.route) },
+                        onAiClick = { navController.navigate(Screen.AiAssistant.route) },
                         onToggleTheme = onToggleTheme
                     )
                 }
@@ -224,7 +221,15 @@ fun NinghsingCheAppRoot(
                 if (showBottomBar) {
                     EditorialBottomNavBar(
                         currentRoute = currentRoute,
-                        onNavigate = { go(it) }
+                        onNavigate = { route ->
+                            navController.navigate(route) {
+                                popUpTo(Screen.Home.route) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
                     )
                 }
             }
@@ -285,23 +290,14 @@ fun NinghsingCheAppRoot(
                             onSearchClick = {
                                 navController.navigate(Screen.Search.route)
                             },
+                            onAiClick = {
+                                navController.navigate(Screen.AiAssistant.route)
+                            },
                             onPdfArchiveClick = {
                                 navController.navigate(Screen.PdfArchive.route)
                             },
                             onSeeAllCategoriesClick = {
                                 navController.navigate(Screen.Explore.route)
-                            },
-                            onAuthorsClick = {
-                                navController.navigate(Screen.AuthorsDirectory.route)
-                            },
-                            onSubmitClick = {
-                                navController.navigate(Screen.BlogSubmission.route)
-                            },
-                            onFeaturedClick = {
-                                navController.navigate(Screen.Featured.route)
-                            },
-                            onPdfClick = { pdfId ->
-                                navController.navigate(Screen.PdfViewer.createRoute(pdfId))
                             }
                         )
                     }
@@ -312,9 +308,6 @@ fun NinghsingCheAppRoot(
                             viewModel = homeViewModel,
                             onArticleClick = { navController.navigate(Screen.ArticleDetail.createRoute(it)) }
                         )
-                    }
-                    composable(Screen.BlogSubmission.route) {
-                        BlogSubmissionScreen(viewModel = blogSubmissionViewModel)
                     }
                     composable(Screen.About.route) { AboutScreen() }
                     composable(Screen.SocialActivities.route) {

@@ -51,6 +51,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.AiChatMessage
+import com.example.data.model.ArticleCitation
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
+import com.example.ui.components.MarkdownFormattedText
 import com.example.ui.components.AiAssistantSkeletonLayout
 import com.example.ui.components.AiSourceCitationCard
 import com.example.ui.viewmodel.AiViewModel
@@ -85,10 +91,17 @@ fun AiAssistantScreen(
         return
     }
 
+    val focusManager = LocalFocusManager.current
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = {
+                    focusManager.clearFocus()
+                })
+            }
     ) {
         // Top Header
         Surface(
@@ -103,7 +116,10 @@ fun AiAssistantScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
-                    onClick = onBackClick,
+                    onClick = {
+                        focusManager.clearFocus()
+                        onBackClick()
+                    },
                     modifier = Modifier.testTag("ai_back_button")
                 ) {
                     Icon(
@@ -141,7 +157,7 @@ fun AiAssistantScreen(
                         )
                     )
                     Text(
-                        text = "বিষ্ণুপ্রিয়া মণিপুরি ঐতিহ্য ও গবেষণা তথ্যকোষ",
+                        text = "বিষ্ণুপ্রিয়া মণিপুরি ঐতিহ্য ও বিশ্ব জ্ঞানকোষ",
                         style = MaterialTheme.typography.bodySmall.copy(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 11.sp
@@ -157,14 +173,22 @@ fun AiAssistantScreen(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .testTag("ai_chat_stream"),
+                .testTag("ai_chat_stream")
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = {
+                        focusManager.clearFocus()
+                    })
+                },
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             items(messages) { message ->
                 ChatMessageItem(
                     message = message,
-                    onCitationClick = onArticleClick
+                    onCitationClick = {
+                        focusManager.clearFocus()
+                        onArticleClick(it)
+                    }
                 )
             }
 
@@ -181,7 +205,7 @@ fun AiAssistantScreen(
                             modifier = Modifier.size(20.dp)
                         )
                         Text(
-                            text = "নিংশিং চে আর্কাইভ থেকে তথ্য বিশ্লেষণ করা হচ্ছে...",
+                            text = "AI বিশ্লেষণ ও উত্তর প্রস্তুত করা হচ্ছে...",
                             style = MaterialTheme.typography.bodySmall.copy(
                                 color = MaterialTheme.colorScheme.primary,
                                 fontSize = 12.sp
@@ -214,6 +238,7 @@ fun AiAssistantScreen(
                             color = MaterialTheme.colorScheme.primaryContainer,
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                             modifier = Modifier.clickable {
+                                focusManager.clearFocus()
                                 viewModel.sendQuestion(suggestion)
                             }
                         ) {
@@ -250,7 +275,7 @@ fun AiAssistantScreen(
                     onValueChange = { inputQuery = it },
                     placeholder = {
                         Text(
-                            text = "কোন বিষয়র প্রশ্ন ইকিক...",
+                            text = "যেকোনো বিষয়ে প্রশ্ন করুন...",
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                 fontSize = 13.sp
@@ -269,8 +294,10 @@ fun AiAssistantScreen(
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                     keyboardActions = KeyboardActions(onSend = {
                         if (inputQuery.isNotBlank()) {
-                            viewModel.sendQuestion(inputQuery)
+                            val q = inputQuery
                             inputQuery = ""
+                            focusManager.clearFocus()
+                            viewModel.sendQuestion(q)
                         }
                     }),
                     modifier = Modifier
@@ -281,8 +308,10 @@ fun AiAssistantScreen(
                 IconButton(
                     onClick = {
                         if (inputQuery.isNotBlank()) {
-                            viewModel.sendQuestion(inputQuery)
+                            val q = inputQuery
                             inputQuery = ""
+                            focusManager.clearFocus()
+                            viewModel.sendQuestion(q)
                         }
                     },
                     modifier = Modifier
@@ -344,16 +373,12 @@ fun ChatMessageItem(
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                     shadowElevation = 1.dp
                 ) {
-                    Text(
-                        text = message.text,
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            fontFamily = FontFamily.Serif,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontSize = 14.sp,
-                            lineHeight = 22.sp
-                        ),
-                        modifier = Modifier.padding(14.dp)
-                    )
+                    Box(modifier = Modifier.padding(14.dp)) {
+                        MarkdownFormattedText(
+                            markdown = message.text,
+                            baseTextColor = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
 
                 // Citations list
@@ -366,7 +391,7 @@ fun ChatMessageItem(
                             fontSize = 11.sp
                         )
                     )
-                    message.citations.forEach { citation ->
+                    for (citation in message.citations) {
                         AiSourceCitationCard(
                             citation = citation,
                             onClick = { onCitationClick(citation.articleId) }

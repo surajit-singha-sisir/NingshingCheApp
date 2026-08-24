@@ -280,6 +280,24 @@ class ReaderViewModel(
         }
     }
 
+    fun submitComment(name: String, address: String, email: String, phone: String, content: String) {
+        val art = _currentArticle.value ?: return
+        if (name.isBlank() || email.isBlank() || content.isBlank()) {
+            _commentStatus.value = "নাঙ, ইমেইল বারো মন্তব্য আবশ্যক।"
+            return
+        }
+        viewModelScope.launch {
+            _isSubmittingComment.value = true
+            _commentStatus.value = "মন্তব্য পাঠানি অর..."
+            val result = repository.submitComment(art.sourceUrl, name, address, email, phone, content)
+            _isSubmittingComment.value = false
+            _commentStatus.value = result.getOrElse { it.message ?: "মন্তব্য পাঠানো যায়নি" }
+            if (result.isSuccess) {
+                _comments.value = repository.loadComments(art.sourceUrl)
+            }
+        }
+    }
+
     fun toggleBookmark() {
         val art = _currentArticle.value ?: return
         viewModelScope.launch {
@@ -326,23 +344,6 @@ class ReaderViewModel(
             _ttsProgressText.value = "অডিও পাঠ চলছে..."
             tts?.speak(speechText, TextToSpeech.QUEUE_FLUSH, null, "ArticleTts_${article.id}")
             _isTtsPlaying.value = true
-        }
-    }
-
-    fun submitComment(name: String, address: String, email: String, phone: String, content: String) {
-        val art = _currentArticle.value ?: return
-        if (name.isBlank() || email.isBlank() || content.isBlank()) {
-            _commentStatus.value = "নাঙ, ইমেইল বারো মন্তব্য লাগতই।"
-            return
-        }
-        viewModelScope.launch {
-            _isSubmittingComment.value = true
-            val result = repository.submitComment(art.sourceUrl, name, address, email, phone, content)
-            _commentStatus.value = result.getOrElse { it.message ?: "পাঠানি নাইল" }
-            if (result.isSuccess) {
-                _comments.value = repository.loadComments(art.sourceUrl)
-            }
-            _isSubmittingComment.value = false
         }
     }
 
@@ -622,45 +623,6 @@ class PdfViewerViewModel(
     }
 }
 
-class BlogSubmissionViewModel(
-    private val repository: ArticleRepository
-) : ViewModel() {
-    private val _isSubmitting = MutableStateFlow(false)
-    val isSubmitting: StateFlow<Boolean> = _isSubmitting.asStateFlow()
-
-    private val _status = MutableStateFlow<String?>(null)
-    val status: StateFlow<String?> = _status.asStateFlow()
-
-    fun submit(
-        name: String,
-        facebook: String,
-        address: String,
-        email: String,
-        phone: String,
-        writerInfo: String,
-        articleTitle: String,
-        articleBody: String,
-        photoBytes: ByteArray?,
-        photoName: String,
-        fileBytes: ByteArray?,
-        fileName: String
-    ) {
-        if (name.isBlank() || email.isBlank() || articleTitle.isBlank() || writerInfo.isBlank()) {
-            _status.value = "নাঙ, ইমেইল, লেখক পরিচিতি বারো টাইটেল লাগতই।"
-            return
-        }
-        viewModelScope.launch {
-            _isSubmitting.value = true
-            val result = repository.submitBlog(
-                name, facebook, address, email, phone, writerInfo, articleTitle, articleBody,
-                photoBytes, photoName, fileBytes, fileName
-            )
-            _status.value = result.getOrElse { it.message ?: "পাঠানি নাইল" }
-            _isSubmitting.value = false
-        }
-    }
-}
-
 // Factory
 class ViewModelFactory(
     private val repository: ArticleRepository,
@@ -682,7 +644,6 @@ class ViewModelFactory(
             modelClass.isAssignableFrom(SettingsViewModel::class.java) -> SettingsViewModel(preferencesRepository, repository) as T
             modelClass.isAssignableFrom(PdfArchiveViewModel::class.java) -> PdfArchiveViewModel(repository) as T
             modelClass.isAssignableFrom(PdfViewerViewModel::class.java) -> PdfViewerViewModel(repository, context) as T
-            modelClass.isAssignableFrom(BlogSubmissionViewModel::class.java) -> BlogSubmissionViewModel(repository) as T
             modelClass.isAssignableFrom(DashboardViewModel::class.java) -> DashboardViewModel(dashboardRepository) as T
             else -> throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
         }

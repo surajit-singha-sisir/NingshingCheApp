@@ -308,8 +308,8 @@ fun AuthorRailCard(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Box {
-                AsyncImage(
-                    model = author.avatarUrl.ifBlank { NinghsingCheContentData.APP_LOGO_URL },
+                PortalAsyncImage(
+                    url = author.avatarUrl,
                     contentDescription = author.name,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
@@ -411,7 +411,7 @@ fun PdfBookRailCard(
 @Composable
 fun HorizontalCardsRow(
     contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp),
-    content: @Composable androidx.compose.foundation.lazy.LazyListScope.() -> Unit
+    content: androidx.compose.foundation.lazy.LazyListScope.() -> Unit
 ) {
     LazyRow(
         contentPadding = contentPadding,

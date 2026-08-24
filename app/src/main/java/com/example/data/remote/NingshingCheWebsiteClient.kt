@@ -16,11 +16,8 @@ import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.FormBody
 import okhttp3.HttpUrl
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import java.net.URLEncoder
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
@@ -61,14 +58,8 @@ class NingshingCheWebsiteClient {
         try {
             val merged = linkedMapOf<String, Article>()
             val featuredIds = mutableSetOf<String>()
-            val homepageAuthors = mutableListOf<Author>()
-            val homepagePdfs = mutableListOf<HomepagePdf>()
 
             fetchPaginated("$SITE/") { html ->
-                if (homepageAuthors.isEmpty()) {
-                    homepageAuthors += parseHomepageAuthors(html)
-                    homepagePdfs += parseHomepagePdfs(html)
-                }
                 parseListing(html, isFeatured = false).also { page ->
                     page.take(3).forEach { featuredIds.add(it.id) }
                 }
@@ -112,12 +103,12 @@ class NingshingCheWebsiteClient {
                 .map { if (it.id in featuredIds) it.copy(isFeatured = true, isEditorialPick = true) else it }
                 .sortedWith(compareByDescending<Article> { it.year }.thenByDescending { it.publishedDate })
 
-            val pdfs = fetchPdfDocuments(homepagePdfs)
+            val pdfs = fetchPdfDocuments()
             Result.success(
                 WebsiteListing(
                     articles = articles,
                     categories = buildCategories(articles),
-                    authors = mergeHomepageAuthors(buildAuthors(articles), homepageAuthors),
+                    authors = buildAuthors(articles),
                     pdfDocuments = pdfs
                 )
             )
@@ -156,39 +147,11 @@ class NingshingCheWebsiteClient {
         return collected.values.toList()
     }
 
-    private suspend fun fetchPdfDocuments(covers: List<HomepagePdf>): List<PdfDocument> = coroutineScope {
-        val parsedCovers = covers.associateBy { it.readId }
+    private suspend fun fetchPdfDocuments(): List<PdfDocument> = coroutineScope {
         (1..6).map { id ->
             async {
-                val html = get("$SITE/read_pdf/$id")
-                val parsed = html?.let { parsePdfPage(it, id) }
-                val extra = parsedCovers[id]
-                val cover = extra?.cover?.takeIf { it.isNotBlank() }
-                    ?: PdfCovers.byReadId[id]
-                    ?: parsed?.coverImageUrl.orEmpty()
-                val title = extra?.title?.ifBlank { parsed?.title }.orEmpty().ifBlank { parsed?.title.orEmpty() }
-                parsed?.copy(
-                    title = title.ifBlank { parsed.title },
-                    coverImageUrl = cover,
-                    edition = extra?.date?.ifBlank { parsed.edition } ?: parsed.edition
-                ) ?: extra?.let {
-                    PdfDocument(
-                        id = "pdf-live-$id",
-                        title = it.title.ifBlank { "নিংশিং চে PDF $id" },
-                        edition = it.date,
-                        category = "বার্ষিক ও উৎসব সংখ্যা",
-                        categorySlug = "pdf-cat-annual",
-                        year = 0,
-                        authorOrEditor = "নিংশিং চে প্রকাশনা পর্ষদ",
-                        pageCount = 0,
-                        fileSizeMb = 0f,
-                        pdfUrl = "$SITE/read_pdf/$id",
-                        coverImageUrl = cover,
-                        description = "নিংশিংচে.কমত্ত সংগৃহীত লেরিক।",
-                        tags = listOf("নিংশিং চে", "PDF"),
-                        downloadUrl = "$SITE/read_pdf/$id"
-                    )
-                }
+                val html = get("$SITE/read_pdf/$id") ?: return@async null
+                parsePdfPage(html, id)
             }
         }.awaitAll().filterNotNull()
     }
@@ -332,9 +295,9 @@ class NingshingCheWebsiteClient {
                 .orEmpty()
         )
         val date = DATE_BN.find(html)?.value.orEmpty()
-        val content = WebsiteHtml.htmlToPortalContent(html)
+        val content = htmlToPortalContent(html)
         val excerpt = description.ifBlank {
-            WebsiteHtml.contentBlocks(content, image).filter { it.first == "p" }.joinToString(" ") { it.second }.take(180)
+            contentBlocks(content).filter { it.first == "p" }.joinToString(" ") { it.second }.take(180)
         }
         val minutes = ((content.length / 900) + 1).coerceIn(3, 25)
 
@@ -365,64 +328,6 @@ class NingshingCheWebsiteClient {
     suspend fun loadComments(articleUrl: String): List<ArticleComment> = withContext(Dispatchers.IO) {
         val html = get(articleUrl) ?: return@withContext emptyList()
         parseComments(html)
-    }
-
-    suspend fun submitBlog(
-        name: String,
-        facebook: String,
-        address: String,
-        email: String,
-        phone: String,
-        writerInfo: String,
-        articleTitle: String,
-        articleBody: String,
-        photoBytes: ByteArray?,
-        photoName: String,
-        fileBytes: ByteArray?,
-        fileName: String
-    ): Result<String> = withContext(Dispatchers.IO) {
-        try {
-            val page = get("$SITE/blog_submission") ?: return@withContext Result.failure(Exception("ফর্ম খোলা যায়নি"))
-            val csrf = CSRF_TOKEN.find(page)?.groupValues?.get(1).orEmpty()
-            if (csrf.isBlank()) return@withContext Result.failure(Exception("ফর্ম টোকেন পাওয়া যায়নি"))
-            val builder = MultipartBody.Builder().setType(MultipartBody.FORM)
-                .addFormDataPart("csrfmiddlewaretoken", csrf)
-                .addFormDataPart("title", name.trim())
-                .addFormDataPart("facebook", facebook.trim())
-                .addFormDataPart("address", address.trim())
-                .addFormDataPart("email", email.trim())
-                .addFormDataPart("phone", phone.trim())
-                .addFormDataPart("writer_info", writerInfo.trim())
-                .addFormDataPart("content_title", articleTitle.trim())
-                .addFormDataPart("content", articleBody.trim())
-            if (photoBytes != null) {
-                builder.addFormDataPart(
-                    "picture_file",
-                    photoName.ifBlank { "author.jpg" },
-                    photoBytes.toRequestBody("image/jpeg".toMediaType())
-                )
-            }
-            if (fileBytes != null) {
-                builder.addFormDataPart(
-                    "file",
-                    fileName.ifBlank { "article.doc" },
-                    fileBytes.toRequestBody("application/octet-stream".toMediaType())
-                )
-            }
-            val request = Request.Builder()
-                .url("$SITE/blog_submission")
-                .header("User-Agent", USER_AGENT)
-                .header("Referer", "$SITE/blog_submission")
-                .header("Origin", SITE)
-                .post(builder.build())
-                .build()
-            http.newCall(request).execute().use { response ->
-                if (response.isSuccessful) Result.success("আর্টিকেল পাঠানি ইল। সম্পাদকীয় পর্যালোচনার পর প্রকাশ অইতই।")
-                else Result.failure(Exception("সার্ভার জবাব: ${response.code}"))
-            }
-        } catch (error: Exception) {
-            Result.failure(error)
-        }
     }
 
     suspend fun submitComment(
@@ -648,80 +553,52 @@ class NingshingCheWebsiteClient {
 
         fun stripTags(html: String): String = html.replace(Regex("""<[^>]+>"""), " ")
 
-        fun htmlToParagraphs(html: String): String = WebsiteHtml.htmlToPortalContent(html)
+        fun htmlToParagraphs(html: String): String = htmlToPortalContent(html)
 
-        fun htmlToPortalContent(fullHtml: String): String = WebsiteHtml.htmlToPortalContent(fullHtml)
-
-        fun contentBlocks(content: String, featuredImageUrl: String = ""): List<Pair<String, String>> =
-            WebsiteHtml.contentBlocks(content, featuredImageUrl)
-
-        fun looksDirty(content: String): Boolean = WebsiteHtml.looksDirty(content)
-
-        data class HomepagePdf(val readId: Int, val title: String, val date: String, val cover: String)
-
-        fun parseHomepagePdfs(html: String): List<HomepagePdf> {
-            val sectionStart = html.indexOf("পিডিএফ(PDF) লেরিক")
-            val section = if (sectionStart >= 0) html.substring(sectionStart) else html
-            val out = mutableListOf<HomepagePdf>()
-            val card = Regex(
-                """<img[^>]+src=["']([^"']+)["'][\s\S]{0,700}?<h4[^>]*>([^<]+)</h4>\s*<p[^>]*>([^<]*)</p>\s*<a[^>]+href=["']([^"']*read_pdf/(\d+))["']""",
-                RegexOption.IGNORE_CASE
-            )
-            card.findAll(section).forEach { match ->
-                out += HomepagePdf(
-                    readId = match.groupValues[5].toIntOrNull() ?: return@forEach,
-                    title = decode(match.groupValues[2]),
-                    date = decode(match.groupValues[3]),
-                    cover = match.groupValues[1]
-                )
-            }
-            return out.distinctBy { it.readId }
-        }
-
-        fun parseHomepageAuthors(html: String): List<Author> {
-            val start = html.indexOf("আমার লেখক পারেঙ")
-            val end = html.indexOf("পিডিএফ(PDF) লেরিক")
-            val section = if (start >= 0) html.substring(start, if (end > start) end else html.length) else return emptyList()
-            val card = Regex(
-                """<img[^>]+src=["']([^"']+)["'][\s\S]{0,2500}?<h4[^>]*>([^<]+)</h4>\s*<p[^>]*>([^<]*)</p>""",
-                RegexOption.IGNORE_CASE
-            )
-            return card.findAll(section).map { match ->
-                val name = decode(match.groupValues[2])
-                val designation = decode(match.groupValues[3])
-                val avatar = match.groupValues[1].replace(" ", "%20")
-                Author(
-                    id = authorIdFromName(name),
-                    name = name,
-                    designation = designation.ifBlank { "নিংশিং চে লেখক" },
-                    bio = designation,
-                    avatarUrl = AuthorProfiles.resolve(name, avatar),
-                    articleCount = 0,
-                    isVerified = AuthorProfiles.isOfficial(avatar)
-                )
-            }.toList().distinctBy { it.id }
-        }
-
-        fun mergeHomepageAuthors(fromArticles: List<Author>, fromHome: List<Author>): List<Author> {
-            if (fromHome.isEmpty()) return fromArticles
-            fun key(name: String) = name.lowercase().replace(Regex("""\s+"""), "")
-            val homeByKey = fromHome.associateBy { key(it.name) }
-            val merged = fromArticles.map { author ->
-                val hit = homeByKey[key(author.name)]
-                    ?: fromHome.firstOrNull { home ->
-                        val a = key(author.name)
-                        val b = key(home.name)
-                        a.contains(b.take(6)) || b.contains(a.take(6))
+        fun htmlToPortalContent(fullHtml: String): String {
+            val article = ARTICLE_BLOCK.find(fullHtml)?.groupValues?.get(1) ?: fullHtml
+            val cutAt = listOf("হাব্বি মন্তব্যহানি", "মন্তব্য করিক", "id=\"contactForm\"", "নুয়া লেখা")
+                .map { article.indexOf(it) }.filter { it > 80 }.minOrNull()
+            val body = if (cutAt != null) article.substring(0, cutAt) else article
+            val out = StringBuilder()
+            BODY_TOKEN.findAll(body).forEach { match ->
+                val isImage = match.groupValues[4].equals("img", ignoreCase = true)
+                if (isImage) {
+                    val attrs = match.groupValues[5]
+                    val src = Regex("""src=["']([^"']+)""").find(attrs)?.groupValues?.get(1).orEmpty()
+                    val lower = src.lowercase()
+                    if (src.isNotBlank() && !lower.contains("profile") && !lower.contains("logo") && !lower.contains("avatar")) {
+                        out.append("▣").append(src).append("\n\n")
                     }
-                if (hit != null) author.copy(
-                    avatarUrl = hit.avatarUrl.ifBlank { author.avatarUrl },
-                    designation = hit.designation.ifBlank { author.designation },
-                    isVerified = hit.isVerified || author.isVerified
-                ) else author
+                } else {
+                    val attrs = match.groupValues[2]
+                    if (attrs.contains("article-content")) return@forEach
+                    val inner = match.groupValues[3]
+                        .replace(Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE), "\n")
+                    val text = decode(stripTags(inner))
+                    if (text.isNotBlank()) out.append("¶").append(text).append("\n\n")
+                }
             }
-            val used = merged.map { key(it.name) }.toSet()
-            val extras = fromHome.filter { key(it.name) !in used }
-            return (merged + extras).sortedByDescending { it.articleCount }
+            return out.toString().trim()
+        }
+
+        fun contentBlocks(content: String): List<Pair<String, String>> {
+            if (content.contains("article-content") || content.contains("<p") || content.contains("id=")) {
+                val cleaned = decode(stripTags(content.replace(Regex("""id=["']article-content["'][^<]*"""), "")))
+                return cleaned.split(Regex("""\n{2,}""")).map { it.trim() }.filter { it.isNotBlank() }.map { "p" to it }
+            }
+            if (content.contains("¶") || content.contains("▣")) {
+                return content.split(Regex("""\n{2,}""")).mapNotNull { chunk ->
+                    val line = chunk.trim()
+                    when {
+                        line.startsWith("▣") -> "img" to line.removePrefix("▣").trim()
+                        line.startsWith("¶") -> "p" to line.removePrefix("¶").trim()
+                        line.isNotBlank() -> "p" to line
+                        else -> null
+                    }
+                }
+            }
+            return content.split(Regex("""\n{2,}""")).map { it.trim() }.filter { it.isNotBlank() }.map { "p" to it }
         }
 
         fun parseComments(html: String): List<ArticleComment> {
@@ -745,10 +622,6 @@ class NingshingCheWebsiteClient {
 
         fun buildCategories(articles: List<Article>): List<Category> {
             val counts = articles.groupingBy { it.categorySlug }.eachCount()
-            val covers = articles
-                .filter { it.featuredImageUrl.isNotBlank() }
-                .groupBy { it.categorySlug }
-                .mapValues { (_, list) -> list.first().featuredImageUrl }
             val fromSite = SITE_CATEGORIES.map { (name, slug) ->
                 Category(
                     id = "cat-$slug",
@@ -756,8 +629,7 @@ class NingshingCheWebsiteClient {
                     slug = slug,
                     description = "$name বিষয়ে নিংশিং চে-তে প্রকাশিত প্রবন্ধসমূহ।",
                     articleCount = counts[slug] ?: 0,
-                    iconName = slug,
-                    imageUrl = covers[slug].orEmpty()
+                    iconName = slug
                 )
             }
             val extras = articles
@@ -770,8 +642,7 @@ class NingshingCheWebsiteClient {
                         slug = slug,
                         description = "${list.first().category} বিষয়ে নিংশিং চে-তে প্রকাশিত প্রবন্ধসমূহ।",
                         articleCount = list.size,
-                        iconName = slug,
-                        imageUrl = list.firstOrNull { it.featuredImageUrl.isNotBlank() }?.featuredImageUrl.orEmpty()
+                        iconName = slug
                     )
                 }
             return (fromSite + extras).filter { it.articleCount > 0 || SITE_CATEGORIES.any { known -> known.second == it.slug } }
