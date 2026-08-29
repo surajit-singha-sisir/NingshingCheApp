@@ -147,6 +147,7 @@
       <form id="blog-editor-form" class="blog-editor" novalidate>
         <div class="blog-editor-main">
           <section class="surface form-stack">
+            ${isEdit ? '' : NC.importer.formControlHTML('blogs')}
             <div class="field"><label class="field-label" for="blog-title">Title <span aria-hidden="true">*</span></label><input class="title-input" id="blog-title" name="title" value="${escapeHTML(record?.title || '')}" placeholder="Enter an article title" autofocus required><p class="field-error hidden" data-field-error="title"></p></div>
             <div class="field"><label class="field-label" for="blog-subtitle">Subtitle</label><textarea class="subtitle-input" id="blog-subtitle" name="sub_title" rows="2" placeholder="Add context or a compelling standfirst">${escapeHTML(record?.sub_title || '')}</textarea></div>
             ${NC.media.imageUploaderHTML({ id: 'blog-hero-image', label: 'Hero image', hint: 'Choose a local image for ImgBB upload, or paste a direct image URL.' })}
@@ -244,6 +245,18 @@
       }
     }
     slug.addEventListener('blur', checkSlug);
+    if (!isEdit) NC.importer.mountFormControl(root, {
+      type: 'blogs',
+      onRecord: ({ payload }) => {
+        NC.importer.fillForm(form, payload);
+        heroUploader.setValue(payload.image || '');
+        pdfUploader.setValue({ url: payload.pdf_book_link || '', provider: 'url', file_size_mb: payload.pdf_file_size_mb || 0 });
+        editorController.setValue(payload.content || '');
+        slugTouched = Boolean(payload.slug);
+        updateWordCount(payload.content || '');
+        checkSlug();
+      }
+    });
 
     function collectData(statusOverride) {
       const data = formData(form);
@@ -410,12 +423,13 @@
 
   function renderListShell() {
     root.innerHTML = `
-      ${NC.components.pageHeader({ eyebrow: 'Editorial content', title: 'Blogs', description: 'Draft, review, preview, and publish magazine articles.', breadcrumb: [{ label: 'Blogs' }], actions: '<button type="button" class="btn btn-primary" data-add-blog><i class="fa-regular fa-plus" aria-hidden="true"></i>Add blog</button>' })}
+      ${NC.components.pageHeader({ eyebrow: 'Editorial content', title: 'Blogs', description: 'Draft, review, preview, and publish magazine articles.', breadcrumb: [{ label: 'Blogs' }], actions: `${NC.importer.bulkButton('blogs')}<button type="button" class="btn btn-primary" data-add-blog><i class="fa-regular fa-plus" aria-hidden="true"></i>Add blog</button>` })}
       <section class="surface"><div class="list-toolbar"><label class="search-field"><i class="fa-regular fa-magnifying-glass" aria-hidden="true"></i><span class="sr-only">Search blogs</span><input type="search" placeholder="Search title, author, category, tag…" data-blog-search></label><select class="form-select toolbar-select" data-blog-status aria-label="Filter by status"><option value="all">All statuses</option><option value="Publish">Published</option><option value="Draft">Draft</option></select><select class="form-select toolbar-select" data-blog-category aria-label="Filter by category"><option value="all">All categories</option>${categories.map((item) => `<option value="${escapeHTML(item.id)}">${escapeHTML(item.title)}</option>`).join('')}</select></div><div data-blogs-content>${NC.components.skeleton(7, 6)}</div></section>`;
     root.querySelector('[data-add-blog]').addEventListener('click', () => renderEditor());
     root.querySelector('[data-blog-search]').addEventListener('input', debounce((event) => { state.setQuery(event.target.value); renderList(); }, 220));
     root.querySelector('[data-blog-status]').addEventListener('change', (event) => { state.setFilter('status', event.target.value); renderList(); });
     root.querySelector('[data-blog-category]').addEventListener('change', (event) => { state.setFilter('category_id', event.target.value); renderList(); });
+    NC.importer.bindBulk(root, { type: 'blogs', onComplete: () => load() });
   }
 
   async function load(context = {}, editId = '') {

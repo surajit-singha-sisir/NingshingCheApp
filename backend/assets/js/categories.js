@@ -63,6 +63,7 @@
       description: 'Use concise labels that make sense to readers.',
       content: `
         <form id="category-form" class="form-stack" novalidate>
+          ${record ? '' : NC.importer.formControlHTML('categories')}
           <div class="field"><label class="field-label" for="category-title">Title <span aria-hidden="true">*</span></label><input class="form-input" id="category-title" name="title" value="${escapeHTML(record?.title || '')}" autofocus required><p class="field-error hidden" data-field-error="title"></p></div>
           <div class="field"><label class="field-label" for="category-subtitle">Subtitle</label><input class="form-input" id="category-subtitle" name="sub_title" value="${escapeHTML(record?.sub_title || '')}" placeholder="Optional short description"></div>
           <div class="field"><div class="field-heading"><label class="field-label" for="category-slug">Slug <span aria-hidden="true">*</span></label><button type="button" class="field-action" data-generate-slug><i class="fa-regular fa-wand-magic-sparkles" aria-hidden="true"></i>Generate</button></div><div class="input-prefix"><span>/category/</span><input class="form-input" id="category-slug" name="slug" value="${escapeHTML(record?.slug || '')}" required></div><p class="field-error hidden" data-field-error="slug"></p></div>
@@ -82,6 +83,10 @@
         };
         form.addEventListener('input', debounce(updatePreview, 80));
         modalRoot.querySelector('[data-generate-slug]').addEventListener('click', () => { slug.value = slugify(title.value); slug.focus(); });
+        if (!record) NC.importer.mountFormControl(modalRoot, {
+          type: 'categories',
+          onRecord: ({ payload }) => { NC.importer.fillForm(form, payload); updatePreview(); }
+        });
         form.addEventListener('submit', async (event) => {
           event.preventDefault();
           const data = formData(form);
@@ -153,10 +158,11 @@
   function render(container, context = {}) {
     root = container;
     root.innerHTML = `
-      ${NC.components.pageHeader({ eyebrow: 'Taxonomy', title: 'Categories', description: 'Organize articles into clear, reader-friendly sections.', breadcrumb: [{ label: 'Categories' }], actions: '<button type="button" class="btn btn-primary" data-add-category><i class="fa-regular fa-layer-plus" aria-hidden="true"></i>Add category</button>' })}
+      ${NC.components.pageHeader({ eyebrow: 'Taxonomy', title: 'Categories', description: 'Organize articles into clear, reader-friendly sections.', breadcrumb: [{ label: 'Categories' }], actions: `${NC.importer.bulkButton('categories')}<button type="button" class="btn btn-primary" data-add-category><i class="fa-regular fa-layer-plus" aria-hidden="true"></i>Add category</button>` })}
       <section class="surface"><div class="list-toolbar"><label class="search-field"><i class="fa-regular fa-magnifying-glass" aria-hidden="true"></i><span class="sr-only">Search categories</span><input type="search" placeholder="Search categories…" data-category-search></label><span class="toolbar-note"><i class="fa-regular fa-circle-info" aria-hidden="true"></i>Usage is calculated from live blog relationships</span></div><div data-categories-content>${NC.components.skeleton(6, 5)}</div></section>`;
     root.querySelector('[data-add-category]').addEventListener('click', () => openForm());
     root.querySelector('[data-category-search]').addEventListener('input', debounce((event) => { state.setQuery(event.target.value); renderList(); }, 220));
+    NC.importer.bindBulk(root, { type: 'categories', onComplete: () => load(context) });
     return load(context);
   }
 

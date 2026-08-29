@@ -93,7 +93,8 @@
       description: 'Create a clear public byline profile for the magazine.',
       content: `
         <form id="author-form" novalidate>
-          <div class="form-preview-layout">
+          ${record ? '' : NC.importer.formControlHTML('authors')}
+          <div class="form-preview-layout ${record ? '' : 'mt-5'}">
             <div class="form-stack">
               <div class="field"><label class="field-label" for="author-title">Name / Title <span aria-hidden="true">*</span></label><input class="form-input" id="author-title" name="title" value="${escapeHTML(record?.title || '')}" autocomplete="name" autofocus required><p class="field-error hidden" data-field-error="title"></p></div>
               <div class="form-grid-2">
@@ -122,6 +123,14 @@
         };
         form.addEventListener('input', debounce(updatePreview, 120));
         modalRoot.querySelector('[data-refresh-author-preview]').addEventListener('click', updatePreview);
+        if (!record) NC.importer.mountFormControl(modalRoot, {
+          type: 'authors',
+          onRecord: ({ payload }) => {
+            NC.importer.fillForm(form, payload);
+            uploader.setValue(payload.image || '');
+            updatePreview();
+          }
+        });
         form.addEventListener('submit', async (event) => {
           event.preventDefault();
           const data = formData(form);
@@ -185,7 +194,7 @@
     const initialFilter = context.params?.get('filter') || 'all';
     state.setFilter('is_verified', initialFilter === 'verified' ? true : (initialFilter === 'unverified' ? false : 'all'));
     root.innerHTML = `
-      ${NC.components.pageHeader({ eyebrow: 'People', title: 'Authors', description: 'Manage writer profiles, bylines, and verification.', breadcrumb: [{ label: 'Authors' }], actions: '<button type="button" class="btn btn-primary" data-add-author><i class="fa-regular fa-user-plus" aria-hidden="true"></i>Add author</button>' })}
+      ${NC.components.pageHeader({ eyebrow: 'People', title: 'Authors', description: 'Manage writer profiles, bylines, and verification.', breadcrumb: [{ label: 'Authors' }], actions: `${NC.importer.bulkButton('authors')}<button type="button" class="btn btn-primary" data-add-author><i class="fa-regular fa-user-plus" aria-hidden="true"></i>Add author</button>` })}
       <section class="surface">
         <div class="list-toolbar"><label class="search-field"><i class="fa-regular fa-magnifying-glass" aria-hidden="true"></i><span class="sr-only">Search authors</span><input type="search" placeholder="Search authors…" data-author-search></label><select class="form-select toolbar-select" data-author-filter aria-label="Filter verification"><option value="all">All authors</option><option value="verified">Verified</option><option value="unverified">Unverified</option></select></div>
         <div data-authors-content>${NC.components.skeleton(6, 5)}</div>
@@ -194,6 +203,7 @@
     root.querySelector('[data-author-search]').addEventListener('input', debounce((event) => { state.setQuery(event.target.value); renderList(); }, 220));
     const filter = root.querySelector('[data-author-filter]'); filter.value = initialFilter;
     filter.addEventListener('change', (event) => { state.setFilter('is_verified', event.target.value === 'verified' ? true : (event.target.value === 'unverified' ? false : 'all')); renderList(); });
+    NC.importer.bindBulk(root, { type: 'authors', onComplete: () => load(context) });
     return load(context);
   }
 

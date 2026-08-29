@@ -1,6 +1,6 @@
 # Ningshing Che — Editorial Dashboard
 
-A responsive, no-build administration dashboard for **Ningshing Che — Bishnupriya Manipuri Magazine**. It is built with semantic HTML, Tailwind CSS via CDN, modular Vanilla JavaScript, Chart.js, Quill, DOMPurify, Font Awesome 6 Pro, Supabase REST, ImgBB, and Supabase Storage.
+A responsive, no-build administration dashboard for **Ningshing Che — Bishnupriya Manipuri Magazine**. It is built with semantic HTML, Tailwind CSS via CDN, modular Vanilla JavaScript, Chart.js, Quill, DOMPurify, SheetJS, Font Awesome 6 Pro, Supabase REST, ImgBB, and Supabase Storage.
 
 The dashboard is located entirely inside `backend/`, as requested.
 
@@ -17,6 +17,8 @@ The dashboard is located entirely inside `backend/`, as requested.
 - Reusable ImgBB image uploader with drag/drop, progress, validation, metadata, and delete URL preservation
 - Blog hero images through local upload or direct URL
 - Blog and library PDF fields through local upload or direct URL, backed by a 32 MB Supabase Storage bucket
+- Validated CSV and genuine Excel import for all eight content sections, with preview, templates, relationship resolution, and duplicate skipping
+- First-row CSV/Excel population in every Add workflow for manual review before save
 - Transactional submission-to-blog conversion with author de-duplication
 - Real Chart.js metrics and activity calculated from Supabase records
 - Global `Ctrl + K` search
@@ -41,6 +43,7 @@ backend/
 │       ├── media.js           # ImgBB, PDF, and safe video previews
 │       ├── editor.js          # Quill/fallback rich-text abstraction
 │       ├── crud.js            # Shared list and CRUD behavior
+│       ├── importer.js        # CSV/XLS/XLSX templates, validation, preview, import
 │       ├── dashboard.js       # Metrics, charts, activity
 │       ├── authors.js
 │       ├── blogs.js
@@ -224,6 +227,71 @@ ImgBB’s upload API is for images, not PDF documents. Local PDF files therefore
 - Storage provider, object path, and size are preserved for later cleanup
 - Old stored files are deleted only after the replacement record saves successfully
 
+## CSV and Excel imports
+
+Spreadsheet import is available for **Authors, Blogs, Categories, Comments, Galleries, PDF Books, Submit Blogs, and Videos**. Settings are intentionally excluded.
+
+Two workflows are provided:
+
+1. **Bulk create:** select **Import CSV / Excel** in a list-page header, upload a file, select a worksheet when necessary, inspect the validation preview, and import all valid rows.
+2. **Fill one Add form:** select **Choose file** in the import card at the top of an Add workflow. The first data row fills the form but is **not saved automatically**; review and edit it before using the normal Save/Publish action.
+
+Both import surfaces provide downloadable CSV and Excel templates. Excel templates include an **Import Data** worksheet and a separate **Instructions** worksheet with required-field guidance. The implementation accepts:
+
+- `.csv` (UTF-8, UTF-8 BOM, UTF-16 LE, or UTF-16 BE)
+- genuine `.xlsx`
+- legacy `.xls` input
+- up to 10 MB and 5,000 data rows per selected sheet
+
+The pinned standalone SheetJS browser build parses and generates Excel workbooks without npm, a compiler, or a build step. CSV parsing also has a local fallback so CSV remains usable if SheetJS is unavailable.
+
+### Import columns
+
+Headers are case-insensitive, and common labels such as `name`, `image_url`, `subtitle`, and `pdf_url` are recognized as aliases. The safest option is to retain the downloaded template headers.
+
+| Section | Supported template columns |
+| --- | --- |
+| Authors | `title`, `designation`, `location`, `image`, `description`, `is_verified` |
+| Blogs | `title`, `slug`, `sub_title`, `content`, `category_slug`, `category_id`, `author_name`, `author_id`, `status`, `tags`, `image`, `video_link`, `pdf_book_link`, `seo_title`, `seo_description`, `is_slider`, `is_feature`, `is_special_article`, `published_date` |
+| Categories | `title`, `sub_title`, `slug`, `icon_name` |
+| Comments | `blog_slug`, `blog_id`, `name`, `email`, `phone`, `address`, `content`, `status` |
+| Galleries | `title`, `image`, `category`, `description` |
+| PDF Books | `title`, `book_published_date`, `image`, `link`, `author_or_editor`, `edition`, `category`, `page_count`, `file_size_mb`, `description` |
+| Submit Blogs | `title`, `designation`, `address`, `phone`, `thumbnail`, `writer_name`, `writer_designation`, `writer_profile_image`, `writer_email`, `writer_facebook`, `content_title`, `content`, `status` |
+| Videos | `title`, `video_link`, `thumbnail_url`, `description` |
+
+### Relationships, media, statuses, and dates
+
+- Blog categories resolve against an existing category by `category_id`, slug, or exact case-insensitive title.
+- Blog authors resolve against an existing author by `author_id` or exact case-insensitive name.
+- Comment blogs resolve against an existing Blog by `blog_id`, slug, or exact case-insensitive title.
+- An unresolved required relationship marks the bulk row invalid. First-row form population reports a warning and leaves the relationship for manual selection.
+- Spreadsheet image and PDF cells accept **direct public `http://` or `https://` URLs only**. Embedded Excel images, attachments, and local file paths are not extracted. Direct-URL media metadata is retained with provider `url`; no fabricated ImgBB deletion URL or Storage object path is created.
+- Blog and submission content is sanitized before it reaches either the form or Supabase. Plain text is converted to basic paragraphs; supported HTML is preserved after sanitization.
+- Blog status accepts Draft or Publish; Comment status accepts Publish or Unpublish. Submission import accepts Pending, Reviewed, or Rejected. Approval/Published transitions remain reserved for the dashboard conversion workflow.
+- Dates may use `YYYY-MM-DD` or another browser-parseable date. New-record `created_at` and `updated_at` values remain server-managed.
+
+### Validation and duplicate policy
+
+Nothing is written during parsing or preview. Each row is labeled **Ready**, **Duplicate**, or **Invalid**, and unrecognized columns are explicitly reported. Invalid rows and duplicates are skipped; imports never overwrite existing records.
+
+Duplicate identity is evaluated as follows:
+
+| Section | Duplicate identity |
+| --- | --- |
+| Authors | case-insensitive title/name |
+| Blogs | case-insensitive slug |
+| Categories | case-insensitive slug |
+| Comments | Blog + email/name + exact normalized comment content |
+| Galleries | image URL, falling back to title + category |
+| PDF Books | title + edition |
+| Submit Blogs | title + writer email/name |
+| Videos | normalized video URL |
+
+Duplicates are checked against current Supabase records and against earlier rows in the selected worksheet. Valid rows are inserted individually with bounded concurrency, so one rejected row does not discard successful rows. The result screen reports imported, skipped, and failed totals and preserves row-specific API errors for correction.
+
+> **Migration note:** Blog and Submit Blog imports that include the newer media metadata rely on `supabase/migrations/003_blog_media_uploads.sql`. Install that migration on an older database before testing those imports.
+
 ## Running locally
 
 A local HTTP server is recommended so browser security APIs and CDN assets work consistently.
@@ -250,6 +318,7 @@ Opening `index.html` directly may work in some browsers, but a local server avoi
 - Chart.js `4.4.7`
 - Quill `2.0.3`
 - DOMPurify `3.2.4`
+- SheetJS `0.20.3` from the authoritative pinned browser CDN
 
 Pinned versions are used where the CDN package supports it. If a CDN is blocked, core error and empty states remain readable; rich-text editing falls back to a basic contenteditable editor.
 
@@ -319,6 +388,8 @@ The implementation follows these rules:
 - Old ImgBB media is not deleted before a replacement upload and save succeeds.
 - Foreign keys, not duplicated labels, are authoritative relationships.
 - Compatibility labels for the Android client are maintained by database triggers.
+- Spreadsheet imports perform create-only operations: existing duplicate identities are skipped and never patched.
+- Spreadsheet relationship values must resolve to existing Supabase records before a bulk row is accepted.
 - API failures remain visible and do not break the entire dashboard shell.
 - No fake dashboard statistics are used; charts display zero/empty states until real records exist.
 
@@ -337,8 +408,13 @@ Completed checks:
 - Blog preview, rich editor, two-image submission form, submission approval form, PDF uploader, and provider-safe video preview were opened successfully.
 - Blog hero and PDF file-or-URL controls, the nested Quill image chooser, and 375 px responsive layout were exercised in Chromium.
 - Fixture-backed ImgBB and Supabase Storage uploads produced a Blog payload containing hero, inline-image, PDF provider/path/size, and deletion metadata.
+- CSV bulk validation correctly classified ready, within-file duplicate, and invalid rows; an intercepted create request verified the normalized Supabase payload without modifying production.
+- A genuine `.xlsx` workbook populated the first Author Add form row, including text, boolean, and direct image URL values.
+- CSV and genuine Excel template downloads were generated successfully, and all eight list/Add workflows exposed their correct import controls while Settings exposed none.
+- All eight entity transformers passed valid schema-shaped rows; Blog relation lookup, tag parsing, direct-media metadata, reading time, and HTML sanitization were verified.
+- The import modal was checked at 375 px: it retained 10 px viewport margins, caused no document-level overflow, and confined its wide preview table to an internal horizontal scroller.
 - Automated axe accessibility checks reported zero violations for the login and dashboard views at desktop and mobile sizes.
-- No uncaught browser page errors occurred in the fixture-backed navigation pass.
+- No uncaught browser page errors occurred in the fixture-backed navigation pass or spreadsheet-import pass.
 
 The configured project now returns HTTP 200 for all nine required tables after `supabase/schema.sql` was installed. The new Blog media columns require `supabase/migrations/003_blog_media_uploads.sql` on that existing installation. Destructive live CRUD and third-party ImgBB uploads were intentionally not run against production; perform the final add/edit/delete/upload checklist in a staging project after installing the migration.
 
@@ -370,7 +446,16 @@ Run `supabase/migrations/003_blog_media_uploads.sql` in Supabase SQL Editor, the
 - Use a PDF below 32 MB.
 - Use a direct public PDF URL as a fallback.
 
-### Charts or editor do not load
+### Spreadsheet cannot be read or rows are invalid
+
+- Download a fresh template from the same section and preserve its first header row.
+- Keep the file at or below 10 MB and 5,000 data rows per selected worksheet.
+- For Blog/Comment relations, confirm the referenced author, category, or Blog already exists and that its ID, slug, or title matches.
+- Use direct public URLs for spreadsheet media fields; do not paste local paths or embed files inside Excel.
+- If `.xlsx` parsing or Excel template generation is unavailable, check whether `cdn.sheetjs.com` is blocked, or use CSV.
+- Run migration 003 before importing Blog/submission media metadata into an older database.
+
+### Charts, editor, or Excel parser do not load
 
 Check whether the browser or content blocker is blocking the pinned CDN URLs.
 

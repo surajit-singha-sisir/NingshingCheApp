@@ -69,6 +69,7 @@
       title: record ? 'Edit comment' : 'Add comment', eyebrow: 'Comment moderation', size: 'lg',
       content: `
         <form id="comment-form" class="form-stack" novalidate>
+          ${record ? '' : NC.importer.formControlHTML('comments')}
           <div class="field"><label class="field-label" for="comment-blog">Blog <span aria-hidden="true">*</span></label><select class="form-select" id="comment-blog" name="blog_id"><option value="">Choose a blog</option>${blogs.map((blog) => `<option value="${escapeHTML(blog.id)}" ${blog.id === record?.blog_id ? 'selected' : ''}>${escapeHTML(blog.title)}</option>`).join('')}</select><p class="field-error hidden" data-field-error="blog_id"></p></div>
           <div class="form-grid-2"><div class="field"><label class="field-label" for="comment-name">Name <span aria-hidden="true">*</span></label><input class="form-input" id="comment-name" name="name" value="${escapeHTML(record?.name || '')}" autocomplete="name" autofocus><p class="field-error hidden" data-field-error="name"></p></div><div class="field"><label class="field-label" for="comment-status">Status</label><select class="form-select" id="comment-status" name="status"><option value="Unpublish" ${record?.status !== 'Publish' ? 'selected' : ''}>Unpublish</option><option value="Publish" ${record?.status === 'Publish' ? 'selected' : ''}>Publish</option></select></div></div>
           <div class="form-grid-2"><div class="field"><label class="field-label" for="comment-email">Email</label><input class="form-input" type="email" id="comment-email" name="email" value="${escapeHTML(record?.email || '')}" autocomplete="email"><p class="field-error hidden" data-field-error="email"></p></div><div class="field"><label class="field-label" for="comment-phone">Phone</label><input class="form-input" type="tel" id="comment-phone" name="phone" value="${escapeHTML(record?.phone || '')}" autocomplete="tel"></div></div>
@@ -78,6 +79,9 @@
       footer: `<button type="button" class="btn btn-secondary" data-modal-close>Cancel</button><button type="submit" form="comment-form" class="btn btn-primary" data-save-comment><i class="fa-regular fa-floppy-disk" aria-hidden="true"></i>${record ? 'Save changes' : 'Add comment'}</button>`,
       onOpen: (modalRoot) => {
         const form = modalRoot.querySelector('#comment-form');
+        if (!record) NC.importer.mountFormControl(modalRoot, {
+          type: 'comments', onRecord: ({ payload }) => NC.importer.fillForm(form, payload)
+        });
         form.addEventListener('submit', async (event) => {
           event.preventDefault(); const data = formData(form);
           const errors = {
@@ -135,13 +139,14 @@
     const initialStatus = context.params?.get('filter') || 'all';
     state.setFilter('status', ['Publish', 'Unpublish'].includes(initialStatus) ? initialStatus : 'all');
     root.innerHTML = `
-      ${NC.components.pageHeader({ eyebrow: 'Community', title: 'Comments', description: 'Review reader feedback and control what appears publicly.', breadcrumb: [{ label: 'Comments' }], actions: '<button type="button" class="btn btn-primary" data-add-comment><i class="fa-regular fa-plus" aria-hidden="true"></i>Add comment</button>' })}
+      ${NC.components.pageHeader({ eyebrow: 'Community', title: 'Comments', description: 'Review reader feedback and control what appears publicly.', breadcrumb: [{ label: 'Comments' }], actions: `${NC.importer.bulkButton('comments')}<button type="button" class="btn btn-primary" data-add-comment><i class="fa-regular fa-plus" aria-hidden="true"></i>Add comment</button>` })}
       <section class="surface"><div class="list-toolbar"><label class="search-field"><i class="fa-regular fa-magnifying-glass" aria-hidden="true"></i><span class="sr-only">Search comments</span><input type="search" placeholder="Search comments…" data-comment-search></label><select class="form-select toolbar-select" data-comment-status aria-label="Filter comment status"><option value="all">All statuses</option><option value="Unpublish">Needs moderation</option><option value="Publish">Published</option></select><select class="form-select toolbar-select" data-comment-blog aria-label="Filter by blog"><option value="all">All blogs</option></select></div><div data-comments-content>${NC.components.skeleton(7, 5)}</div></section>`;
     root.querySelector('[data-add-comment]').addEventListener('click', () => openForm());
     root.querySelector('[data-comment-search]').addEventListener('input', debounce((event) => { state.setQuery(event.target.value); renderList(); }, 220));
     const status = root.querySelector('[data-comment-status]'); status.value = ['Publish', 'Unpublish'].includes(initialStatus) ? initialStatus : 'all';
     status.addEventListener('change', (event) => { state.setFilter('status', event.target.value); renderList(); });
     root.querySelector('[data-comment-blog]').addEventListener('change', (event) => { state.setFilter('blog_id', event.target.value); renderList(); });
+    NC.importer.bindBulk(root, { type: 'comments', onComplete: () => load(context) });
     return load(context).then(() => {
       if (NC.crud.isStaleNavigation(context)) return;
       const select = root.querySelector('[data-comment-blog]');

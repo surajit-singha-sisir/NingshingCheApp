@@ -306,6 +306,19 @@
       }
     }
     function emit(previous) { options.onChange?.({ ...value }, previous ? { ...previous } : null); }
+    function setValue(nextValue = '') {
+      const source = typeof nextValue === 'string' ? { url: nextValue } : (nextValue || {});
+      const previous = value;
+      const url = source.url || source.link || '';
+      value = {
+        url,
+        path: source.path || source.file_storage_path || source.pdf_storage_path || '',
+        provider: source.provider || source.file_provider || source.pdf_file_provider || 'url',
+        size: Number(source.size || (source.file_size_mb || source.pdf_file_size_mb || 0) * 1024 * 1024 || 0),
+        filename: source.filename || (url ? url.split('/').pop().split('?')[0] : '')
+      };
+      setError(''); render(); emit(previous);
+    }
     function applyUrl() {
       const url = urlInput.value.trim();
       if (url && !isValidUrl(url, { allowEmpty: false })) { setError('Enter a complete http:// or https:// PDF URL.'); return; }
@@ -339,7 +352,7 @@
     });
     render();
     return Object.freeze({
-      getValue: () => ({ ...value }), isUploading: () => uploading,
+      getValue: () => ({ ...value }), setValue, isUploading: () => uploading,
       validate: () => {
         if (value.url && !safeExternalUrl(value.url)) { setError('Enter a valid PDF URL.'); return false; }
         return true;
