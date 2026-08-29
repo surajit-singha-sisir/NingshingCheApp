@@ -52,6 +52,9 @@ create table if not exists public.blogs (
   title text not null check (length(btrim(title)) > 0),
   sub_title text not null default '',
   image text not null default '',
+  imgbb_delete_url text not null default '',
+  image_meta jsonb not null default '{}'::jsonb,
+  inline_media jsonb not null default '[]'::jsonb,
   content text not null default '',
   category_id uuid references public.categories(id) on update cascade on delete set null,
   author_id uuid references public.authors(id) on update cascade on delete set null,
@@ -61,6 +64,9 @@ create table if not exists public.blogs (
   seo_description text not null default '',
   video_link text not null default '',
   pdf_book_link text not null default '',
+  pdf_file_provider text not null default 'url' check (pdf_file_provider in ('url', 'supabase-storage')),
+  pdf_storage_path text not null default '',
+  pdf_file_size_mb numeric(8,2) not null default 0 check (pdf_file_size_mb >= 0),
   slug text not null check (length(btrim(slug)) > 0),
   is_slider boolean not null default false,
   is_feature boolean not null default false,
@@ -211,6 +217,7 @@ create table if not exists public.submitted_blogs (
   writer_facebook text not null default '',
   content_title text not null default '',
   content text not null check (length(btrim(content)) > 0),
+  inline_media jsonb not null default '[]'::jsonb,
   status text not null default 'Pending'
     check (status in ('Pending', 'Reviewed', 'Approved', 'Rejected', 'Published')),
   reviewed_at timestamptz,
@@ -360,12 +367,16 @@ begin
   end if;
 
   insert into public.blogs (
-    title, sub_title, image, content, category_id, author_id, status, slug
+    title, sub_title, image, imgbb_delete_url, image_meta,
+    content, inline_media, category_id, author_id, status, slug
   ) values (
     submission.title,
     submission.content_title,
     submission.thumbnail,
+    submission.imgbb_delete_url,
+    submission.thumbnail_meta,
     submission.content,
+    submission.inline_media,
     p_category_id,
     selected_author.id,
     case when p_status = 'Publish' then 'Publish' else 'Draft' end,

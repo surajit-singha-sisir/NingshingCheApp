@@ -8,6 +8,10 @@
   let categories = [];
   let submissionEditor = null;
 
+  function hasTransferredMedia(record) {
+    return Boolean(record?.converted_blog_id) || ['Approved', 'Published'].includes(record?.status);
+  }
+
   function renderList() {
     const content = root.querySelector('[data-submissions-content]');
     const { rows, total } = state.paged();
@@ -29,7 +33,7 @@
           { action: 'preview', id: record.id, label: 'Preview article', icon: 'fa-file-magnifying-glass' },
           { action: 'edit', id: record.id, label: 'Edit submission', icon: 'fa-pen' },
           ...(record.status !== 'Approved' && record.status !== 'Published' ? [{ action: 'approve', id: record.id, label: 'Approve and convert to blog', icon: 'fa-circle-check' }] : []),
-          ...(record.status !== 'Rejected' ? [{ action: 'reject', id: record.id, label: 'Reject submission', icon: 'fa-circle-xmark', danger: true }] : []),
+          ...(record.status !== 'Rejected' && !hasTransferredMedia(record) ? [{ action: 'reject', id: record.id, label: 'Reject submission', icon: 'fa-circle-xmark', danger: true }] : []),
           { action: 'delete', id: record.id, label: 'Delete submission', icon: 'fa-trash', danger: true }
         ])}</td>
       </tr>`).join('');
@@ -57,37 +61,84 @@
   }
 
   function previewSubmission(record) {
-    NC.components.openModal({ title: 'Submission preview', eyebrow: record.status || 'Pending', size: 'preview', content: submissionPreviewMarkup(record), footer: '<button type="button" class="btn btn-secondary" data-modal-close>Close</button><button type="button" class="btn btn-primary" data-submission-preview-approve><i class="fa-regular fa-circle-check" aria-hidden="true"></i>Approve</button>', onOpen: (modalRoot) => { NC.components.bindImageFallbacks(modalRoot); modalRoot.querySelector('[data-submission-preview-approve]').addEventListener('click', () => { NC.components.closeModal(); window.setTimeout(() => openApproval(record), 180); }); } });
+    NC.components.openModal({ title: 'Submission preview', eyebrow: record.status || 'Pending', size: 'preview', content: submissionPreviewMarkup(record), footer: `<button type="button" class="btn btn-secondary" data-modal-close>Close</button>${hasTransferredMedia(record) || record.status === 'Rejected' ? '' : '<button type="button" class="btn btn-primary" data-submission-preview-approve><i class="fa-regular fa-circle-check" aria-hidden="true"></i>Approve</button>'}`, onOpen: (modalRoot) => { NC.components.bindImageFallbacks(modalRoot); modalRoot.querySelector('[data-submission-preview-approve]')?.addEventListener('click', () => { NC.components.closeModal(); window.setTimeout(() => openApproval(record), 180); }); } });
   }
 
   function openView(record) {
     NC.components.openModal({
       title: record.title, eyebrow: 'Submission details', size: 'xl',
       content: `<div class="submission-detail-grid"><section><h3 class="section-mini-title">Submitter</h3><dl class="details-list"><div><dt>Title</dt><dd>${escapeHTML(record.title)}</dd></div><div><dt>Designation</dt><dd>${escapeHTML(record.designation || '—')}</dd></div><div><dt>Address</dt><dd>${escapeHTML(record.address || '—')}</dd></div><div><dt>Phone</dt><dd>${escapeHTML(record.phone || '—')}</dd></div></dl></section><section><h3 class="section-mini-title">Writer</h3><div class="profile-preview compact">${NC.utils.avatarHTML(record.writer_name, record.writer_profile_image, 'profile-preview-avatar')}<div><h3>${escapeHTML(record.writer_name)}</h3><p>${escapeHTML(record.writer_designation || 'Contributor')}</p></div></div><dl class="details-list mt-4"><div><dt>Email</dt><dd>${escapeHTML(record.writer_email || '—')}</dd></div><div><dt>Facebook</dt><dd>${safeExternalUrl(record.writer_facebook) ? `<a href="${escapeHTML(record.writer_facebook)}" target="_blank" rel="noopener noreferrer">Open profile <i class="fa-regular fa-arrow-up-right-from-square" aria-hidden="true"></i></a>` : '—'}</dd></div></dl></section></div><section class="mt-6"><div class="flex flex-wrap items-center justify-between gap-3"><h3 class="section-mini-title">Article</h3>${NC.components.statusBadge(record.status)}</div><h4 class="text-xl font-semibold mt-4">${escapeHTML(record.content_title || record.title)}</h4><div class="prose-content mt-4">${NC.utils.sanitizeHTML(record.content)}</div></section>`,
-      footer: '<button type="button" class="btn btn-secondary" data-modal-close>Close</button><button type="button" class="btn btn-secondary" data-submission-edit><i class="fa-regular fa-pen" aria-hidden="true"></i>Edit</button><button type="button" class="btn btn-primary" data-submission-approve><i class="fa-regular fa-circle-check" aria-hidden="true"></i>Approve & convert</button>',
+      footer: `<button type="button" class="btn btn-secondary" data-modal-close>Close</button><button type="button" class="btn btn-secondary" data-submission-edit><i class="fa-regular fa-pen" aria-hidden="true"></i>Edit</button>${hasTransferredMedia(record) || record.status === 'Rejected' ? '' : '<button type="button" class="btn btn-primary" data-submission-approve><i class="fa-regular fa-circle-check" aria-hidden="true"></i>Approve & convert</button>'}`,
       onOpen: (modalRoot) => {
         NC.components.bindImageFallbacks(modalRoot);
         modalRoot.querySelector('[data-submission-edit]').addEventListener('click', () => { NC.components.closeModal(); window.setTimeout(() => openForm(record), 180); });
-        modalRoot.querySelector('[data-submission-approve]').addEventListener('click', () => { NC.components.closeModal(); window.setTimeout(() => openApproval(record), 180); });
+        modalRoot.querySelector('[data-submission-approve]')?.addEventListener('click', () => { NC.components.closeModal(); window.setTimeout(() => openApproval(record), 180); });
       }
     });
   }
 
   function openForm(record = null) {
     let thumbnailUploader, writerUploader;
+    let formSaved = false;
+    let formClosed = false;
+    let cleanupFormUploads = () => Promise.resolve();
+    const thumbnailSessionUploads = [];
+    const writerSessionUploads = [];
     const thumbnailInitial = { url: record?.thumbnail || '', delete_url: record?.imgbb_delete_url || '', image_meta: record?.thumbnail_meta || {} };
     const writerInitial = { url: record?.writer_profile_image || '', delete_url: record?.writer_profile_delete_url || '', image_meta: record?.writer_profile_meta || {} };
     NC.components.openModal({
       title: record ? 'Edit submission' : 'Add submission', eyebrow: 'Contributor article', size: 'full',
       description: 'Preserve submitter details while preparing the article for editorial review.',
-      content: `<form id="submission-form" class="form-stack" novalidate><fieldset class="form-section"><legend><span>01</span>Submitter</legend><div class="form-grid-2"><div class="field"><label class="field-label" for="submission-title">Submission title <span aria-hidden="true">*</span></label><input class="form-input" id="submission-title" name="title" value="${escapeHTML(record?.title || '')}" autofocus><p class="field-error hidden" data-field-error="title"></p></div><div class="field"><label class="field-label" for="submission-designation">Designation</label><input class="form-input" id="submission-designation" name="designation" value="${escapeHTML(record?.designation || '')}"></div></div><div class="form-grid-2"><div class="field"><label class="field-label" for="submission-address">Address</label><input class="form-input" id="submission-address" name="address" value="${escapeHTML(record?.address || '')}"></div><div class="field"><label class="field-label" for="submission-phone">Phone</label><input class="form-input" type="tel" id="submission-phone" name="phone" value="${escapeHTML(record?.phone || '')}"></div></div>${NC.media.imageUploaderHTML({ id: 'submission-thumbnail', label: 'Thumbnail', hint: 'Upload the article thumbnail to ImgBB or paste a URL.' })}</fieldset><fieldset class="form-section"><legend><span>02</span>Writer information</legend><div class="form-grid-2"><div class="field"><label class="field-label" for="writer-name">Writer name <span aria-hidden="true">*</span></label><input class="form-input" id="writer-name" name="writer_name" value="${escapeHTML(record?.writer_name || '')}"><p class="field-error hidden" data-field-error="writer_name"></p></div><div class="field"><label class="field-label" for="writer-designation">Writer designation</label><input class="form-input" id="writer-designation" name="writer_designation" value="${escapeHTML(record?.writer_designation || '')}"></div></div>${NC.media.imageUploaderHTML({ id: 'writer-profile', label: 'Writer profile image', hint: 'This may become the author profile image when approved.' })}<div class="form-grid-2"><div class="field"><label class="field-label" for="writer-email">Email</label><input class="form-input" type="email" id="writer-email" name="writer_email" value="${escapeHTML(record?.writer_email || '')}"><p class="field-error hidden" data-field-error="writer_email"></p></div><div class="field"><label class="field-label" for="writer-facebook">Facebook</label><input class="form-input" type="url" id="writer-facebook" name="writer_facebook" value="${escapeHTML(record?.writer_facebook || '')}" placeholder="https://facebook.com/…"><p class="field-error hidden" data-field-error="writer_facebook"></p></div></div></fieldset><fieldset class="form-section"><legend><span>03</span>Article</legend><div class="form-grid-2"><div class="field"><label class="field-label" for="content-title">Content title</label><input class="form-input" id="content-title" name="content_title" value="${escapeHTML(record?.content_title || '')}"></div><div class="field"><label class="field-label" for="submission-status">Moderation status</label><select class="form-select" id="submission-status" name="status">${['Pending', 'Reviewed', 'Approved', 'Rejected'].map((status) => `<option value="${status}" ${status === (record?.status || 'Pending') ? 'selected' : ''}>${status}</option>`).join('')}</select></div></div>${NC.editor.editorHTML({ id: 'submission-content', label: 'Article content', required: true, hint: 'Review formatting and remove unsafe or unnecessary markup.' })}</fieldset></form>`,
+      content: `<form id="submission-form" class="form-stack" novalidate><fieldset class="form-section"><legend><span>01</span>Submitter</legend><div class="form-grid-2"><div class="field"><label class="field-label" for="submission-title">Submission title <span aria-hidden="true">*</span></label><input class="form-input" id="submission-title" name="title" value="${escapeHTML(record?.title || '')}" autofocus><p class="field-error hidden" data-field-error="title"></p></div><div class="field"><label class="field-label" for="submission-designation">Designation</label><input class="form-input" id="submission-designation" name="designation" value="${escapeHTML(record?.designation || '')}"></div></div><div class="form-grid-2"><div class="field"><label class="field-label" for="submission-address">Address</label><input class="form-input" id="submission-address" name="address" value="${escapeHTML(record?.address || '')}"></div><div class="field"><label class="field-label" for="submission-phone">Phone</label><input class="form-input" type="tel" id="submission-phone" name="phone" value="${escapeHTML(record?.phone || '')}"></div></div>${NC.media.imageUploaderHTML({ id: 'submission-thumbnail', label: 'Thumbnail', hint: 'Upload the article thumbnail to ImgBB or paste a URL.' })}</fieldset><fieldset class="form-section"><legend><span>02</span>Writer information</legend><div class="form-grid-2"><div class="field"><label class="field-label" for="writer-name">Writer name <span aria-hidden="true">*</span></label><input class="form-input" id="writer-name" name="writer_name" value="${escapeHTML(record?.writer_name || '')}"><p class="field-error hidden" data-field-error="writer_name"></p></div><div class="field"><label class="field-label" for="writer-designation">Writer designation</label><input class="form-input" id="writer-designation" name="writer_designation" value="${escapeHTML(record?.writer_designation || '')}"></div></div>${NC.media.imageUploaderHTML({ id: 'writer-profile', label: 'Writer profile image', hint: 'This may become the author profile image when approved.' })}<div class="form-grid-2"><div class="field"><label class="field-label" for="writer-email">Email</label><input class="form-input" type="email" id="writer-email" name="writer_email" value="${escapeHTML(record?.writer_email || '')}"><p class="field-error hidden" data-field-error="writer_email"></p></div><div class="field"><label class="field-label" for="writer-facebook">Facebook</label><input class="form-input" type="url" id="writer-facebook" name="writer_facebook" value="${escapeHTML(record?.writer_facebook || '')}" placeholder="https://facebook.com/…"><p class="field-error hidden" data-field-error="writer_facebook"></p></div></div></fieldset><fieldset class="form-section"><legend><span>03</span>Article</legend><div class="form-grid-2"><div class="field"><label class="field-label" for="content-title">Content title</label><input class="form-input" id="content-title" name="content_title" value="${escapeHTML(record?.content_title || '')}"></div><div class="field"><label class="field-label" for="submission-status">Moderation status</label><select class="form-select" id="submission-status" name="status" ${hasTransferredMedia(record) ? 'disabled aria-describedby="submission-status-note"' : ''}>${(hasTransferredMedia(record) ? [record?.status || 'Approved'] : ['Pending', 'Reviewed', 'Rejected']).map((status) => `<option value="${status}" ${status === (record?.status || 'Pending') ? 'selected' : ''}>${status}</option>`).join('')}</select>${hasTransferredMedia(record) ? '<span class="field-hint" id="submission-status-note">Converted status is locked to protect shared media references.</span>' : ''}</div></div>${NC.editor.editorHTML({ id: 'submission-content', label: 'Article content', required: true, hint: 'Review formatting and remove unsafe or unnecessary markup.' })}</fieldset></form>`,
       footer: `<button type="button" class="btn btn-secondary" data-modal-close>Cancel</button><button type="button" class="btn btn-secondary" data-preview-submission-form><i class="fa-regular fa-eye" aria-hidden="true"></i>Preview</button><button type="submit" form="submission-form" class="btn btn-primary" data-save-submission><i class="fa-regular fa-floppy-disk" aria-hidden="true"></i>${record ? 'Save changes' : 'Add submission'}</button>`,
       onOpen: (modalRoot) => {
         const form = modalRoot.querySelector('#submission-form');
-        submissionEditor = NC.editor.mountEditor(modalRoot.querySelector('#submission-content'), { initial: record?.content || '', required: true, label: 'Article content' });
-        thumbnailUploader = NC.media.mountImageUploader(modalRoot.querySelector('#submission-thumbnail'), { initial: thumbnailInitial });
-        writerUploader = NC.media.mountImageUploader(modalRoot.querySelector('#writer-profile'), { initial: writerInitial });
-        const collect = () => ({ ...formData(form), thumbnail: thumbnailUploader.getValue().url, writer_profile_image: writerUploader.getValue().url, content: submissionEditor.getValue(), created_at: record?.created_at || new Date().toISOString() });
+        submissionEditor = NC.editor.mountEditor(modalRoot.querySelector('#submission-content'), {
+          initial: record?.content || '',
+          media: Array.isArray(record?.inline_media) ? record.inline_media : [],
+          required: true,
+          label: 'Article content'
+        });
+        thumbnailUploader = NC.media.mountImageUploader(modalRoot.querySelector('#submission-thumbnail'), {
+          initial: thumbnailInitial,
+          onChange: (next) => {
+            if (next?.provider !== 'imgbb' || !next.delete_url) return;
+            if (!thumbnailSessionUploads.some((item) => item.url === next.url)) thumbnailSessionUploads.push({ ...next });
+            if (formClosed) NC.crud.deleteMediaRecords([next]);
+          }
+        });
+        writerUploader = NC.media.mountImageUploader(modalRoot.querySelector('#writer-profile'), {
+          initial: writerInitial,
+          onChange: (next) => {
+            if (next?.provider !== 'imgbb' || !next.delete_url) return;
+            if (!writerSessionUploads.some((item) => item.url === next.url)) writerSessionUploads.push({ ...next });
+            if (formClosed) NC.crud.deleteMediaRecords([next]);
+          }
+        });
+        const collect = () => {
+          const data = formData(form);
+          return {
+            ...data,
+            status: data.status || record?.status || 'Pending',
+            thumbnail: thumbnailUploader.getValue().url,
+            writer_profile_image: writerUploader.getValue().url,
+            content: submissionEditor.getValue(),
+            inline_media: submissionEditor.getMedia(),
+            created_at: record?.created_at || new Date().toISOString()
+          };
+        };
+        cleanupFormUploads = async ({ saved = false, thumbnail = null, writerImage = null } = {}) => {
+          formClosed = true;
+          const activeInlineUrls = new Set(submissionEditor.getMedia().map((item) => item.url));
+          const inline = saved
+            ? (hasTransferredMedia(record)
+              ? submissionEditor.getSessionUploads().filter((item) => !activeInlineUrls.has(item.url))
+              : submissionEditor.getInactiveMedia())
+            : submissionEditor.getSessionUploads();
+          const thumbnailUnused = thumbnailSessionUploads.filter((item) => !saved || item.url !== thumbnail?.url);
+          const writerUnused = writerSessionUploads.filter((item) => !saved || item.url !== writerImage?.url);
+          await NC.crud.deleteMediaRecords([...inline, ...thumbnailUnused, ...writerUnused]);
+        };
         modalRoot.querySelector('[data-preview-submission-form]').addEventListener('click', () => {
           const data = collect();
           const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHTML(data.title || 'Submission preview')}</title><style>body{margin:0;background:#f5f2eb;color:#1e293b;font-family:system-ui;padding:24px}article{max-width:840px;margin:auto;background:#fff;padding:clamp(24px,7vw,70px);border-radius:22px}h1{font-family:Georgia,serif;font-size:clamp(2.4rem,6vw,4.5rem);line-height:1.05}.subtitle{font-size:1.25rem;color:#64748b}.hero{width:100%;max-height:520px;object-fit:cover;border-radius:18px;margin:28px 0}.byline{font-weight:700;color:#7c3aed}.body{font-family:Georgia,serif;font-size:1.1rem;line-height:1.85}.body img{max-width:100%}.body table{width:100%;border-collapse:collapse}.body td,.body th{border:1px solid #cbd5e1;padding:9px}</style></head><body><article><p class="byline">Contributor preview · ${escapeHTML(data.writer_name || 'Unknown writer')}</p><h1>${escapeHTML(data.title || 'Untitled submission')}</h1>${data.content_title ? `<p class="subtitle">${escapeHTML(data.content_title)}</p>` : ''}${safeImage(data.thumbnail) ? `<img class="hero" src="${escapeHTML(safeImage(data.thumbnail))}" alt="">` : ''}<div class="body">${NC.utils.sanitizeHTML(data.content)}</div></article></body></html>`;
@@ -100,8 +151,10 @@
             writer_email: data.writer_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.writer_email) ? 'Enter a valid email address.' : '',
             writer_facebook: data.writer_facebook && !NC.utils.isValidUrl(data.writer_facebook, { allowEmpty: false }) ? 'Enter a complete Facebook URL.' : ''
           };
-          if (!validateFields(form, errors) || !submissionEditor.validate() || thumbnailUploader.isUploading() || writerUploader.isUploading()) {
-            if (thumbnailUploader.isUploading() || writerUploader.isUploading()) NC.components.toast('Wait for image uploads to finish.', 'warning'); return;
+          const valid = validateFields(form, errors) && submissionEditor.validate() && thumbnailUploader.validate() && writerUploader.validate();
+          if (!valid || thumbnailUploader.isUploading() || writerUploader.isUploading()) {
+            if (thumbnailUploader.isUploading() || writerUploader.isUploading()) NC.components.toast('Wait for image uploads to finish.', 'warning');
+            return;
           }
           const thumbnail = thumbnailUploader.getValue(), writerImage = writerUploader.getValue(), button = modalRoot.querySelector('[data-save-submission]'); NC.utils.setButtonLoading(button, true, 'Saving…');
           try {
@@ -111,22 +164,35 @@
               writer_name: data.writer_name, writer_designation: data.writer_designation,
               writer_profile_image: writerImage.url, writer_profile_delete_url: writerImage.delete_url || '', writer_profile_meta: NC.crud.imagePayload(writerImage).image_meta,
               writer_email: data.writer_email, writer_facebook: data.writer_facebook,
-              content_title: data.content_title, content: data.content, status: data.status
+              content_title: data.content_title, content: data.content,
+              inline_media: data.inline_media, status: data.status
             });
-            await Promise.all([
-              NC.crud.deleteReplacedMedia({ delete_url: record?.imgbb_delete_url }, thumbnail),
-              NC.crud.deleteReplacedMedia({ delete_url: record?.writer_profile_delete_url }, writerImage)
-            ]);
+            if (!hasTransferredMedia(record)) {
+              await Promise.all([
+                NC.crud.deleteReplacedMedia({ delete_url: record?.imgbb_delete_url }, thumbnail),
+                NC.crud.deleteReplacedMedia({ delete_url: record?.writer_profile_delete_url }, writerImage)
+              ]);
+            }
+            await cleanupFormUploads({ saved: true, thumbnail, writerImage });
+            formSaved = true;
             NC.components.toast(`Submission ${record ? 'updated' : 'added'} successfully.`, 'success'); NC.components.closeModal(); await load();
           } catch (error) { console.error(error); NC.components.toast(NC.api.userMessage(error, 'Unable to save the submission.'), 'error'); }
           finally { NC.utils.setButtonLoading(button, false); }
         });
       },
-      onClose: () => { submissionEditor?.destroy?.(); submissionEditor = null; }
+      onClose: () => {
+        if (!formSaved) cleanupFormUploads().catch((error) => console.warn('Unable to clean up unused submission uploads:', error));
+        submissionEditor?.destroy?.();
+        submissionEditor = null;
+      }
     });
   }
 
   function openApproval(record) {
+    if (hasTransferredMedia(record) || record.status === 'Rejected') {
+      NC.components.toast('This submission is not eligible for another conversion.', 'warning');
+      return;
+    }
     const suggestedSlug = slugify(record.title);
     NC.components.openModal({
       title: 'Approve & convert to blog', eyebrow: 'Editorial workflow', size: 'lg',
@@ -171,7 +237,13 @@
     }
     const category = categories.find((item) => item.id === data.category_id);
     const blog = await NC.api.insert('blogs', {
-      title: record.title, sub_title: record.content_title || '', image: record.thumbnail || '', content: record.content,
+      title: record.title,
+      sub_title: record.content_title || '',
+      image: record.thumbnail || '',
+      imgbb_delete_url: record.imgbb_delete_url || '',
+      image_meta: record.thumbnail_meta || {},
+      content: record.content,
+      inline_media: Array.isArray(record.inline_media) ? record.inline_media : [],
       category_id: data.category_id, category_title: category?.title || '', category_slug: category?.slug || '',
       author_id: author.id, author_name: author.title, author_image: author.image || '', status: data.status,
       slug: data.slug, tags: [], is_slider: false, is_feature: false, is_special_article: false,
@@ -183,6 +255,10 @@
   }
 
   async function reject(record) {
+    if (hasTransferredMedia(record)) {
+      NC.components.toast('A converted submission cannot be rejected because its media is shared with published records.', 'warning');
+      return;
+    }
     const accepted = await NC.components.confirm({ title: 'Reject this submission?', description: `“${record.title}” will remain in the archive with a Rejected status.`, confirmLabel: 'Reject submission', confirmIcon: 'fa-circle-xmark' });
     if (!accepted) return;
     try { await NC.api.update('submissions', record.id, { status: 'Rejected', reviewed_at: new Date().toISOString() }); NC.components.toast('Submission rejected.', 'success'); await load(); }
@@ -191,7 +267,14 @@
 
   async function remove(record) {
     try {
-      if (await NC.crud.deleteRecord({ table: 'submissions', record, label: 'submission', remoteDeleteUrls: [record.imgbb_delete_url, record.writer_profile_delete_url] })) await load();
+      const mediaWasTransferred = hasTransferredMedia(record);
+      const inlineDeleteUrls = (Array.isArray(record.inline_media) ? record.inline_media : []).map((item) => item.delete_url);
+      const remoteDeleteUrls = mediaWasTransferred ? [] : [record.imgbb_delete_url, record.writer_profile_delete_url, ...inlineDeleteUrls];
+      const deleted = await NC.crud.deleteRecord({ table: 'submissions', record, label: 'submission', remoteDeleteUrls });
+      if (deleted) {
+        await load();
+        if (mediaWasTransferred) NC.components.toast('Transferred images were preserved for the related Blog and author.', 'success');
+      }
     } catch (error) { console.error(error); NC.components.toast(NC.api.userMessage(error, 'Unable to delete the submission.'), 'error'); }
   }
 

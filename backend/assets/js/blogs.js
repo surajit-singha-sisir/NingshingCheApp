@@ -7,6 +7,9 @@
   let authors = [];
   let categories = [];
   let editorController = null;
+  let heroUploader = null;
+  let pdfUploader = null;
+  let editorCleanup = null;
 
   function authorName(record) {
     return authors.find((item) => item.id === record.author_id)?.title || record.author_name || 'Unassigned';
@@ -95,6 +98,17 @@
     return Math.max(1, Math.ceil(words / 220));
   }
 
+  async function hasRelatedSubmission(blogId) {
+    if (!blogId) return false;
+    try {
+      const related = await NC.api.list('submissions', { select: 'id', filters: { converted_blog_id: blogId }, limit: 1 });
+      return related.data.length > 0;
+    } catch (error) {
+      console.warn('Could not verify shared submission media; remote images will be preserved.', error);
+      return true;
+    }
+  }
+
   function previewDocument(data) {
     const content = articlePreviewMarkup(data);
     return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHTML(data.title || 'Article preview')}</title><style>
@@ -125,6 +139,8 @@
 
   function renderEditor(record = null) {
     const isEdit = Boolean(record?.id);
+    editorCleanup?.();
+    editorCleanup = null;
     editorController?.destroy?.();
     root.innerHTML = `
       ${NC.components.pageHeader({ eyebrow: isEdit ? 'Edit article' : 'New article', title: isEdit ? record.title : 'Create a blog', description: 'Write, preview, and publish from a focused editorial workspace.', breadcrumb: [{ label: 'Blogs', route: 'blogs' }, { label: isEdit ? 'Edit' : 'New' }], actions: '<button type="button" class="btn btn-secondary" data-editor-cancel><i class="fa-regular fa-arrow-left" aria-hidden="true"></i>Back to blogs</button>' })}
@@ -133,12 +149,13 @@
           <section class="surface form-stack">
             <div class="field"><label class="field-label" for="blog-title">Title <span aria-hidden="true">*</span></label><input class="title-input" id="blog-title" name="title" value="${escapeHTML(record?.title || '')}" placeholder="Enter an article title" autofocus required><p class="field-error hidden" data-field-error="title"></p></div>
             <div class="field"><label class="field-label" for="blog-subtitle">Subtitle</label><textarea class="subtitle-input" id="blog-subtitle" name="sub_title" rows="2" placeholder="Add context or a compelling standfirst">${escapeHTML(record?.sub_title || '')}</textarea></div>
-            <div class="field"><div class="field-heading"><label class="field-label" for="blog-image">Hero image URL</label><span class="field-hint">URL only</span></div><input class="form-input" type="url" id="blog-image" name="image" value="${escapeHTML(record?.image || '')}" placeholder="https://example.com/article-image.jpg"><p class="field-error hidden" data-field-error="image"></p><div class="url-image-preview ${record?.image ? '' : 'is-empty'}" data-blog-image-preview>${record?.image ? `<img src="${escapeHTML(safeImage(record.image))}" alt="Hero image preview" referrerpolicy="no-referrer"><div><strong>Hero image preview</strong><a href="${escapeHTML(safeImage(record.image))}" target="_blank" rel="noopener noreferrer">Open original</a></div>` : '<i class="fa-regular fa-image" aria-hidden="true"></i><span>Enter an image URL to preview it here</span>'}</div></div>
+            ${NC.media.imageUploaderHTML({ id: 'blog-hero-image', label: 'Hero image', hint: 'Choose a local image for ImgBB upload, or paste a direct image URL.' })}
             ${NC.editor.editorHTML({ id: 'blog-content', label: 'Article content', hint: 'Use headings and short paragraphs for a readable magazine article.', required: true })}
           </section>
           <details class="surface advanced-panel mt-5" ${isEdit ? '' : 'open'}><summary><span><i class="fa-regular fa-sliders" aria-hidden="true"></i><strong>SEO & Advanced Options</strong></span><i class="fa-regular fa-chevron-down" aria-hidden="true"></i></summary><div class="advanced-content form-stack">
             <div class="form-grid-2"><div class="field"><label class="field-label" for="blog-seo-title">SEO title</label><input class="form-input" id="blog-seo-title" name="seo_title" value="${escapeHTML(record?.seo_title || '')}" maxlength="70"><span class="field-hint">Recommended: 50–60 characters</span></div><div class="field"><label class="field-label" for="blog-seo-description">SEO description</label><textarea class="form-textarea" id="blog-seo-description" name="seo_description" rows="3" maxlength="170">${escapeHTML(record?.seo_description || '')}</textarea></div></div>
-            <div class="form-grid-2"><div class="field"><label class="field-label" for="blog-video">Video link</label><input class="form-input" type="url" id="blog-video" name="video_link" value="${escapeHTML(record?.video_link || '')}" placeholder="YouTube, Facebook, or Instagram URL"><p class="field-error hidden" data-field-error="video_link"></p></div><div class="field"><label class="field-label" for="blog-pdf">PDF book link</label><input class="form-input" type="url" id="blog-pdf" name="pdf_book_link" value="${escapeHTML(record?.pdf_book_link || '')}" placeholder="https://example.com/book.pdf"><p class="field-error hidden" data-field-error="pdf_book_link"></p></div></div>
+            <div class="field"><label class="field-label" for="blog-video">Video link</label><input class="form-input" type="url" id="blog-video" name="video_link" value="${escapeHTML(record?.video_link || '')}" placeholder="YouTube, Facebook, or Instagram URL"><p class="field-error hidden" data-field-error="video_link"></p></div>
+            ${NC.media.pdfUploaderHTML({ id: 'blog-pdf-attachment', label: 'PDF attachment' })}
           </div></details>
         </div>
         <aside class="blog-editor-sidebar">
@@ -156,8 +173,47 @@
       </form>`;
 
     const form = root.querySelector('#blog-editor-form');
+    const initialHero = {
+      url: record?.image || '',
+      delete_url: record?.imgbb_delete_url || '',
+      image_meta: record?.image_meta || {}
+    };
+    const initialPdf = {
+      url: record?.pdf_book_link || '',
+      path: record?.pdf_storage_path || '',
+      provider: record?.pdf_file_provider || 'url',
+      size: Number(record?.pdf_file_size_mb || 0) * 1024 * 1024
+    };
+    const heroSessionUploads = [];
+    const pdfSessionUploads = [];
+    let editorClosed = false;
+    heroUploader = NC.media.mountImageUploader(root.querySelector('#blog-hero-image'), {
+      initial: initialHero,
+      label: 'Hero image',
+      onChange: (next) => {
+        if (next?.provider !== 'imgbb' || !next.delete_url) return;
+        if (!heroSessionUploads.some((item) => item.url === next.url)) heroSessionUploads.push({ ...next });
+        if (editorClosed) NC.crud.deleteMediaRecords([next]);
+      }
+    });
+    pdfUploader = NC.media.mountPdfUploader(root.querySelector('#blog-pdf-attachment'), {
+      initial: initialPdf,
+      onChange: (next) => {
+        if (next?.provider !== 'supabase-storage' || !next.path) return;
+        if (!pdfSessionUploads.some((item) => item.path === next.path)) pdfSessionUploads.push({ ...next });
+        if (editorClosed) {
+          NC.api.deleteStorageObject(NC_CONFIG.supabase.pdfBucket, next.path).then((result) => {
+            if (!result.ok) NC.components.toast('A PDF completed after the editor closed and could not be cleaned up automatically.', 'warning');
+          });
+        }
+      }
+    });
     editorController = NC.editor.mountEditor(root.querySelector('#blog-content'), {
-      initial: record?.content || '', required: true, label: 'Article content', onChange: updateWordCount
+      initial: record?.content || '',
+      media: Array.isArray(record?.inline_media) ? record.inline_media : [],
+      required: true,
+      label: 'Article content',
+      onChange: updateWordCount
     });
     const title = form.elements.title;
     const slug = form.elements.slug;
@@ -170,17 +226,8 @@
       root.querySelector('[data-blog-word-count]').textContent = words.toLocaleString();
       root.querySelector('[data-blog-read-time]').textContent = `${Math.max(1, Math.ceil(words / 220))} min`;
     }
-    function updateImagePreview() {
-      const node = root.querySelector('[data-blog-image-preview]');
-      const url = safeImage(form.elements.image.value.trim());
-      if (!url) { node.className = 'url-image-preview is-empty'; node.innerHTML = '<i class="fa-regular fa-image" aria-hidden="true"></i><span>Enter an image URL to preview it here</span>'; return; }
-      node.className = 'url-image-preview';
-      node.innerHTML = `<img src="${escapeHTML(url)}" alt="Hero image preview" referrerpolicy="no-referrer"><div><strong>Hero image preview</strong><a href="${escapeHTML(url)}" target="_blank" rel="noopener noreferrer">Open original</a></div>`;
-      const image = node.querySelector('img'); image.addEventListener('error', () => { node.classList.add('has-error'); node.querySelector('strong').textContent = 'Image could not be loaded'; });
-    }
     title.addEventListener('input', debounce(() => { if (!slugTouched) slug.value = slugify(title.value); }, 100));
     slug.addEventListener('input', () => { slugTouched = true; root.querySelector('[data-slug-feedback]').textContent = ''; });
-    form.elements.image.addEventListener('input', debounce(updateImagePreview, 450));
     root.querySelector('[data-generate-blog-slug]').addEventListener('click', () => { slug.value = slugify(title.value); slugTouched = true; checkSlug(); });
     async function checkSlug() {
       const clean = slugify(slug.value); slug.value = clean;
@@ -202,25 +249,69 @@
       const data = formData(form);
       const category = categories.find((item) => item.id === data.category_id);
       const author = authors.find((item) => item.id === data.author_id);
+      const hero = heroUploader.getValue();
+      const pdf = pdfUploader.getValue();
+      const content = editorController.getValue();
       return {
         ...record,
-        title: data.title, sub_title: data.sub_title, image: data.image,
-        content: editorController.getValue(), category_id: data.category_id,
-        category_title: category?.title || record?.category_title || '', category_slug: category?.slug || record?.category_slug || '',
-        author_id: data.author_id, author_name: author?.title || record?.author_name || '', author_image: author?.image || record?.author_image || '',
-        status: statusOverride || data.status || 'Draft', tags: parseTags(data.tags), seo_title: data.seo_title,
-        seo_description: data.seo_description, video_link: data.video_link, pdf_book_link: data.pdf_book_link,
-        slug: slugify(data.slug), is_slider: Boolean(data.is_slider), is_feature: Boolean(data.is_feature),
-        is_special_article: Boolean(data.is_special_article), reading_time_minutes: estimateReadingTime(editorController.getValue()),
+        title: data.title,
+        sub_title: data.sub_title,
+        ...NC.crud.imagePayload(hero),
+        content,
+        inline_media: editorController.getMedia(),
+        category_id: data.category_id,
+        category_title: category?.title || record?.category_title || '',
+        category_slug: category?.slug || record?.category_slug || '',
+        author_id: data.author_id,
+        author_name: author?.title || record?.author_name || '',
+        author_image: author?.image || record?.author_image || '',
+        status: statusOverride || data.status || 'Draft',
+        tags: parseTags(data.tags),
+        seo_title: data.seo_title,
+        seo_description: data.seo_description,
+        video_link: data.video_link,
+        pdf_book_link: pdf.url || '',
+        pdf_file_provider: pdf.provider || 'url',
+        pdf_storage_path: pdf.path || '',
+        pdf_file_size_mb: pdf.size ? Number((pdf.size / 1024 / 1024).toFixed(2)) : 0,
+        slug: slugify(data.slug),
+        is_slider: Boolean(data.is_slider),
+        is_feature: Boolean(data.is_feature),
+        is_special_article: Boolean(data.is_special_article),
+        reading_time_minutes: estimateReadingTime(content),
         published_date: (statusOverride || data.status) === 'Publish' ? (record?.published_date || new Date().toISOString().slice(0, 10)) : record?.published_date || null,
         created_at: record?.created_at || new Date().toISOString()
       };
     }
 
+    async function cleanupEditorUploads({ saved = false, payload = null, preserveExisting = false } = {}) {
+      editorClosed = true;
+      const keepInlineUrls = new Set((payload?.inline_media || []).map((item) => item.url));
+      const cleanupCandidates = saved && !preserveExisting ? editorController.getInactiveMedia() : editorController.getSessionUploads();
+      const inlineToDelete = cleanupCandidates.filter((item) => !keepInlineUrls.has(item.url));
+      const heroToDelete = heroSessionUploads.filter((item) => !saved || item.url !== payload?.image);
+      await NC.crud.deleteMediaRecords([...heroToDelete, ...inlineToDelete]);
+
+      const paths = [...new Set(pdfSessionUploads.map((item) => item.path).filter((path) => path && (!saved || path !== payload?.pdf_storage_path)))];
+      const results = await Promise.all(paths.map((path) => NC.api.deleteStorageObject(NC_CONFIG.supabase.pdfBucket, path)));
+      if (results.some((result) => !result.ok)) {
+        NC.components.toast('An unused PDF upload could not be removed from Supabase Storage. Review the pdf-books bucket.', 'warning');
+      }
+    }
+    editorCleanup = cleanupEditorUploads;
+
     root.querySelector('[data-blog-preview]').addEventListener('click', () => previewBlog(collectData()));
     root.querySelectorAll('[data-editor-cancel]').forEach((button) => button.addEventListener('click', async () => {
-      const leave = await NC.components.confirm({ title: 'Leave the editor?', description: 'Unsaved changes will be lost.', danger: false, confirmLabel: 'Leave editor', confirmIcon: 'fa-arrow-left' });
-      if (leave) render(root);
+      if (heroUploader.isUploading() || pdfUploader.isUploading()) {
+        NC.components.toast('Wait for active media uploads to finish before leaving the editor.', 'warning');
+        return;
+      }
+      const leave = await NC.components.confirm({ title: 'Leave the editor?', description: 'Unsaved changes will be lost. Newly uploaded files will be cleaned up where the provider permits it.', danger: false, confirmLabel: 'Leave editor', confirmIcon: 'fa-arrow-left' });
+      if (leave) {
+        await cleanupEditorUploads();
+        editorCleanup = null;
+        render(root);
+      }
     }));
     root.querySelectorAll('[data-blog-save]').forEach((button) => button.addEventListener('click', () => saveBlog(button.dataset.blogSave, button)));
 
@@ -229,41 +320,89 @@
       form.elements.status.value = status;
       const errors = {
         title: payload.title ? '' : 'Blog title is required.',
-        image: payload.image && !NC.utils.isValidUrl(payload.image, { allowEmpty: false }) ? 'Enter a complete image URL.' : '',
         category_id: payload.category_id ? '' : 'Choose a category.',
         author_id: payload.author_id ? '' : 'Choose an author.',
         slug: payload.slug ? '' : 'Generate or enter a valid slug.',
-        video_link: payload.video_link && !NC.utils.isValidUrl(payload.video_link, { allowEmpty: false }) ? 'Enter a valid video URL.' : '',
-        pdf_book_link: payload.pdf_book_link && !NC.utils.isValidUrl(payload.pdf_book_link, { allowEmpty: false }) ? 'Enter a valid PDF URL.' : ''
+        video_link: payload.video_link && !NC.utils.isValidUrl(payload.video_link, { allowEmpty: false }) ? 'Enter a valid video URL.' : ''
       };
-      if (!validateFields(form, errors) || !editorController.validate()) return;
+      const valid = validateFields(form, errors) && editorController.validate() && heroUploader.validate() && pdfUploader.validate();
+      if (!valid) return;
+      if (heroUploader.isUploading() || pdfUploader.isUploading()) {
+        NC.components.toast('Wait for all media uploads to finish.', 'warning');
+        return;
+      }
       NC.utils.setButtonLoading(button, true, status === 'Publish' ? 'Publishing…' : 'Saving…');
       try {
         if (!await checkSlug()) { validateFields(form, { slug: 'Choose a unique slug.' }); return; }
+        const preserveSharedMedia = await hasRelatedSubmission(record?.id);
+        const preservedSharedImages = preserveSharedMedia && (
+          Boolean(record?.imgbb_delete_url && record.imgbb_delete_url !== payload.imgbb_delete_url)
+          || editorController.getRemovedMedia().some((item) => item.delete_url)
+        );
         const cleanPayload = {
-          title: payload.title, sub_title: payload.sub_title, image: payload.image,
-          content: payload.content, category_id: payload.category_id || null, author_id: payload.author_id || null,
-          category_title: payload.category_title, category_slug: payload.category_slug,
-          author_name: payload.author_name, author_image: payload.author_image,
-          status: payload.status, tags: payload.tags, seo_title: payload.seo_title,
-          seo_description: payload.seo_description, video_link: payload.video_link,
-          pdf_book_link: payload.pdf_book_link, slug: payload.slug,
-          is_slider: payload.is_slider, is_feature: payload.is_feature,
-          is_special_article: payload.is_special_article, published_date: payload.published_date
+          title: payload.title,
+          sub_title: payload.sub_title,
+          image: payload.image,
+          imgbb_delete_url: payload.imgbb_delete_url,
+          image_meta: payload.image_meta,
+          content: payload.content,
+          inline_media: payload.inline_media,
+          category_id: payload.category_id || null,
+          author_id: payload.author_id || null,
+          category_title: payload.category_title,
+          category_slug: payload.category_slug,
+          author_name: payload.author_name,
+          author_image: payload.author_image,
+          status: payload.status,
+          tags: payload.tags,
+          seo_title: payload.seo_title,
+          seo_description: payload.seo_description,
+          video_link: payload.video_link,
+          pdf_book_link: payload.pdf_book_link,
+          pdf_file_provider: payload.pdf_file_provider,
+          pdf_storage_path: payload.pdf_storage_path,
+          pdf_file_size_mb: payload.pdf_file_size_mb,
+          slug: payload.slug,
+          is_slider: payload.is_slider,
+          is_feature: payload.is_feature,
+          is_special_article: payload.is_special_article,
+          published_date: payload.published_date
         };
         const saved = await NC.crud.save('blogs', record?.id, cleanPayload);
+        if (!preserveSharedMedia) {
+          await NC.crud.deleteReplacedMedia({ delete_url: record?.imgbb_delete_url || '' }, { delete_url: payload.imgbb_delete_url || '' });
+        }
+        if (record?.pdf_storage_path && record.pdf_storage_path !== payload.pdf_storage_path) {
+          const result = await NC.api.deleteStorageObject(NC_CONFIG.supabase.pdfBucket, record.pdf_storage_path);
+          if (!result.ok) NC.components.toast('The Blog was saved, but its replaced PDF could not be removed from Supabase Storage.', 'warning');
+        }
+        await cleanupEditorUploads({ saved: true, payload, preserveExisting: preserveSharedMedia });
+        editorCleanup = null;
+        if (preservedSharedImages) NC.components.toast('Source submission images were preserved.', 'success');
         NC.components.toast(status === 'Publish' ? 'Blog published successfully.' : 'Draft saved successfully.', 'success');
         await load({}, saved?.id || record?.id);
       } catch (error) {
         console.error(error); NC.components.toast(NC.api.userMessage(error, 'Unable to save the blog. Please try again.'), 'error');
       } finally { NC.utils.setButtonLoading(button, false); }
     }
-    updateImagePreview(); updateWordCount();
+    updateWordCount();
   }
 
   async function remove(record) {
     try {
-      if (await NC.crud.deleteRecord({ table: 'blogs', record, label: 'blog' })) await load();
+      const mediaIsShared = await hasRelatedSubmission(record.id);
+      const inlineDeleteUrls = (Array.isArray(record.inline_media) ? record.inline_media : []).map((item) => item.delete_url);
+      const deleted = await NC.crud.deleteRecord({
+        table: 'blogs',
+        record,
+        label: 'blog',
+        remoteDeleteUrls: mediaIsShared ? [] : [record.imgbb_delete_url, ...inlineDeleteUrls],
+        storageObjects: record.pdf_storage_path ? [{ bucket: NC_CONFIG.supabase.pdfBucket, path: record.pdf_storage_path }] : []
+      });
+      if (deleted) {
+        await load();
+        if (mediaIsShared) NC.components.toast('Shared submission images were preserved.', 'success');
+      }
     } catch (error) {
       console.error(error); NC.components.toast(NC.api.userMessage(error, 'Unable to delete the blog.'), 'error');
     }
@@ -280,7 +419,10 @@
   }
 
   async function load(context = {}, editId = '') {
-    editorController?.destroy?.(); editorController = null;
+    editorController?.destroy?.();
+    editorController = null;
+    heroUploader = null;
+    pdfUploader = null;
     root.innerHTML = `${NC.components.pageHeader({ eyebrow: 'Editorial content', title: 'Blogs', description: 'Loading articles and reference data…', breadcrumb: [{ label: 'Blogs' }] })}${NC.components.skeleton(7, 6)}`;
     try {
       const [blogsResult, authorsResult, categoriesResult] = await Promise.all([
@@ -308,5 +450,15 @@
 
   function render(container, context = {}) { root = container; return load(context); }
 
-  NC.views.blogs = { render, destroy: () => editorController?.destroy?.() };
+  NC.views.blogs = {
+    render,
+    destroy: () => {
+      editorCleanup?.();
+      editorCleanup = null;
+      editorController?.destroy?.();
+      editorController = null;
+      heroUploader = null;
+      pdfUploader = null;
+    }
+  };
 })(window.NC);

@@ -250,7 +250,7 @@
       <div class="pdf-uploader" data-pdf-uploader id="${escapeHTML(id)}">
         <div class="field-heading">
           <label class="field-label" for="${escapeHTML(id)}-url">${escapeHTML(label)}</label>
-          <span class="field-hint">Upload a PDF to Supabase Storage or paste a public link. Maximum 32 MB.</span>
+          <span class="field-hint">Choose a local PDF file or paste a direct PDF URL. Files use Supabase Storage; maximum 32 MB.</span>
         </div>
         <div class="grid gap-3 sm:grid-cols-[1fr_auto]">
           <input type="url" class="form-input" id="${escapeHTML(id)}-url" data-pdf-url placeholder="https://example.com/book.pdf">
@@ -285,9 +285,9 @@
     const errorNode = qs('[data-pdf-error]', element);
     let value = {
       url: options.initial?.url || options.initial?.link || '',
-      path: options.initial?.path || options.initial?.file_storage_path || '',
-      provider: options.initial?.provider || options.initial?.file_provider || 'url',
-      size: Number(options.initial?.size || options.initial?.file_size_mb * 1024 * 1024 || 0),
+      path: options.initial?.path || options.initial?.file_storage_path || options.initial?.pdf_storage_path || '',
+      provider: options.initial?.provider || options.initial?.file_provider || options.initial?.pdf_file_provider || 'url',
+      size: Number(options.initial?.size || (options.initial?.file_size_mb || options.initial?.pdf_file_size_mb || 0) * 1024 * 1024 || 0),
       filename: options.initial?.filename || ''
     };
     let uploading = false;

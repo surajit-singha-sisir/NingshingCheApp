@@ -60,7 +60,7 @@
     NC.utils.setButtonLoading(button, true, 'Checking…'); output.innerHTML = NC.components.skeleton(3, 3);
     try {
       const probe = await NC.api.schemaProbe();
-      output.innerHTML = `<div class="diagnostic-grid">${probe.results.map((item) => `<div class="diagnostic-item"><span class="diagnostic-dot ${item.ok ? 'is-ok' : 'is-error'}"></span><code>${escapeHTML(item.table)}</code><span>${item.ok ? 'Ready' : item.error?.isSchemaMissing ? 'Missing' : `Error ${item.error?.status || ''}`}</span></div>`).join('')}</div>${probe.ok ? NC.components.notice('All required Supabase tables are reachable.', 'success') : NC.components.notice('One or more tables are unavailable. Run backend/supabase/schema.sql and review RLS policies.', 'warning')}`;
+      output.innerHTML = `<div class="diagnostic-grid">${probe.results.map((item) => `<div class="diagnostic-item"><span class="diagnostic-dot ${item.ok ? 'is-ok' : 'is-error'}"></span><code>${escapeHTML(item.table)}</code><span>${item.ok ? 'Ready' : item.error?.isSchemaMissing ? 'Missing' : item.error?.isSchemaMismatch ? 'Migration needed' : `Error ${item.error?.status || ''}`}</span></div>`).join('')}</div>${probe.ok ? NC.components.notice('All required Supabase tables and media columns are reachable.', 'success') : NC.components.notice(probe.mismatched.length ? 'Blog media columns are unavailable. Run backend/supabase/migrations/003_blog_media_uploads.sql.' : 'One or more tables are unavailable. Run backend/supabase/schema.sql and review RLS policies.', 'warning')}`;
     } catch (error) { output.innerHTML = NC.components.errorState(error, { retry: false }); }
     finally { NC.utils.setButtonLoading(button, false); }
   }

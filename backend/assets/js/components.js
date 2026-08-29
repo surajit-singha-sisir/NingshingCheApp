@@ -63,16 +63,16 @@
     root.innerHTML = `
       <div class="modal-backdrop" data-modal-close aria-hidden="true"></div>
       <section class="modal-panel modal-${escapeHTML(options.size || 'md')}" role="dialog" aria-modal="true" aria-labelledby="modal-title-${escapeHTML(options.id || 'current')}">
-        <header class="modal-header">
+        <div class="modal-header">
           <div class="min-w-0">
             ${options.eyebrow ? `<p class="eyebrow mb-1">${escapeHTML(options.eyebrow)}</p>` : ''}
             <h2 id="modal-title-${escapeHTML(options.id || 'current')}" class="modal-title">${escapeHTML(options.title || '')}</h2>
             ${options.description ? `<p class="modal-description">${escapeHTML(options.description)}</p>` : ''}
           </div>
           <button type="button" class="icon-button shrink-0" data-modal-close aria-label="Close dialog"><i class="fa-regular fa-xmark" aria-hidden="true"></i></button>
-        </header>
+        </div>
         <div class="modal-body">${options.content || ''}</div>
-        ${options.footer === false ? '' : `<footer class="modal-footer">${options.footer || '<button type="button" class="btn btn-secondary" data-modal-close>Close</button>'}</footer>`}
+        ${options.footer === false ? '' : `<div class="modal-footer">${options.footer || '<button type="button" class="btn btn-secondary" data-modal-close>Close</button>'}</div>`}
       </section>`;
     document.body.appendChild(root);
     document.body.classList.add('modal-open');
@@ -203,7 +203,7 @@
           <p>${escapeHTML(message)}</p>
           <div class="mt-4 flex flex-wrap gap-2">
             ${options.retry !== false ? '<button type="button" class="btn btn-secondary btn-sm" data-retry><i class="fa-regular fa-rotate-right" aria-hidden="true"></i>Try again</button>' : ''}
-            ${error?.isSchemaMissing ? '<a class="btn btn-secondary btn-sm" href="README.md#database-setup" target="_blank"><i class="fa-regular fa-book-open" aria-hidden="true"></i>Setup guide</a>' : ''}
+            ${error?.isSchemaMissing || error?.isSchemaMismatch ? '<a class="btn btn-secondary btn-sm" href="README.md#database-setup" target="_blank"><i class="fa-regular fa-book-open" aria-hidden="true"></i>Setup guide</a>' : ''}
           </div>
         </div>
       </div>`;
@@ -258,9 +258,9 @@
     return `<div class="notice notice-${escapeHTML(tone)}"><i class="fa-solid ${escapeHTML(icon || icons[tone] || icons.info)}" aria-hidden="true"></i><p>${escapeHTML(message)}</p></div>`;
   }
 
-  function remoteDeleteWarning(result) {
+  function remoteDeleteWarning(result, message = 'The database record was removed, but ImgBB did not confirm remote image deletion. Use the saved deletion page to finish manually.') {
     if (!result || result.ok || result.skipped) return;
-    toast('The database record was deleted, but ImgBB did not confirm remote image deletion. Use the saved deletion page to finish manually.', 'warning', {
+    toast(message, 'warning', {
       duration: 10000,
       action: result.deleteUrl ? { label: 'Open ImgBB deletion page', url: result.deleteUrl } : null
     });

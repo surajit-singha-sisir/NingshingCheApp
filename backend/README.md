@@ -11,10 +11,12 @@ The dashboard is located entirely inside `backend/`, as requested.
 - Real Supabase CRUD for authors, blogs, categories, comments, galleries, PDF books, public submissions, videos, and site settings
 - Relationship-aware blog editing with categories and authors
 - WYSIWYG article and submission editors with sanitized HTML/source mode
+- Quill image insertion through either a local ImgBB upload or a direct image URL
 - Slug generation and server-backed uniqueness checks
 - Before-save article, gallery, book, submission, and video previews
 - Reusable ImgBB image uploader with drag/drop, progress, validation, metadata, and delete URL preservation
-- PDF uploads to a 32 MB Supabase Storage bucket
+- Blog hero images through local upload or direct URL
+- Blog and library PDF fields through local upload or direct URL, backed by a 32 MB Supabase Storage bucket
 - Transactional submission-to-blog conversion with author de-duplication
 - Real Chart.js metrics and activity calculated from Supabase records
 - Global `Ctrl + K` search
@@ -53,14 +55,15 @@ backend/
 └── supabase/
     ├── schema.sql
     └── migrations/
-        └── 002_production_rls.sql
+        ├── 002_production_rls.sql
+        └── 003_blog_media_uploads.sql
 ```
 
 ## Database setup
 
 ### What was inspected
 
-A read-only request was made to the configured Supabase REST API on **2026-08-29**. None of these required public tables existed in the PostgREST schema cache:
+The initial read-only request to the configured Supabase REST API on **2026-08-29** found that none of these required public tables existed in the PostgREST schema cache:
 
 - `authors`
 - `categories`
@@ -72,7 +75,7 @@ A read-only request was made to the configured Supabase REST API on **2026-08-29
 - `videos`
 - `settings`
 
-No data was deleted or modified during inspection. The supplied publishable key cannot run SQL migrations, so database installation must be performed once in the Supabase SQL Editor by a project owner.
+The project owner subsequently installed `schema.sql`, and a second read-only REST check returned HTTP 200 for all nine tables. No data was deleted or modified by either inspection. The supplied publishable key cannot run SQL migrations, so schema changes must be performed in the Supabase SQL Editor by a project owner.
 
 ### Install the schema
 
@@ -82,7 +85,18 @@ No data was deleted or modified during inspection. The supplied publishable key 
 4. Run the complete file.
 5. Return to this dashboard and open **Settings → Authentication & database → Run check**.
 
-The migration is additive and uses `CREATE TABLE IF NOT EXISTS`; it does not intentionally drop content tables or rows. It creates:
+### Upgrade an existing dashboard database
+
+If `schema.sql` was installed before Blog media uploads were added, run the complete `supabase/migrations/003_blog_media_uploads.sql` file once in Supabase SQL Editor. It additively adds:
+
+- ImgBB metadata and deletion URL columns for Blog hero images
+- JSON metadata for images inserted through the Blog/submission Quill editors
+- Supabase Storage provider, object path, and size fields for Blog PDF attachments
+- Updated submission conversion logic that transfers hero and inline-image metadata to the Blog
+
+The dashboard database check also verifies these columns and reports **Migration needed** until the migration is installed.
+
+The initial schema is additive and uses `CREATE TABLE IF NOT EXISTS`; it does not intentionally drop content tables or rows. It creates:
 
 - UUID primary keys
 - Foreign keys for blog author/category and comment/blog relationships
@@ -105,7 +119,8 @@ Browser-safe configuration is centralized in `assets/js/config.js`:
 supabase: {
   url: 'https://YOUR_PROJECT.supabase.co',
   publishableKey: 'YOUR_PUBLISHABLE_KEY',
-  pdfBucket: 'pdf-books'
+  pdfBucket: 'pdf-books',
+  pdfMaxBytes: 32 * 1024 * 1024
 }
 ```
 
@@ -183,7 +198,9 @@ The reusable uploader captures and preserves:
 - `mime`
 - provider and upload timestamp
 
-When replacing media, the dashboard uploads and saves the new image first, then attempts to remove the old image.
+The same uploader is used for Blog hero images and inside Quill’s image action. In both places an editor may either choose a local image file for ImgBB upload or enter a direct public image URL. Blog hero metadata is stored in `imgbb_delete_url` / `image_meta`; Quill image metadata is stored in `inline_media` so deletion information is not discarded.
+
+When replacing media, the dashboard uploads and saves the new image first, then attempts to remove the old image. Abandoned uploads created during an editor session are also tracked for cleanup. Images shared by a converted submission and its Blog are preserved instead of being remotely deleted while the related record still relies on them.
 
 ### ImgBB deletion behavior
 
@@ -198,12 +215,13 @@ It never silently claims remote deletion succeeded when ImgBB or browser CORS do
 
 ## PDF uploads
 
-ImgBB is an image host and is not a reliable PDF host. Cover images use ImgBB; actual PDF files use the `pdf-books` Supabase Storage bucket created by `schema.sql`.
+ImgBB’s upload API is for images, not PDF documents. Local PDF files therefore use the `pdf-books` Supabase Storage bucket created by `schema.sql`; the user-facing controls still provide the requested file-or-direct-URL workflow for both Blog attachments and PDF Books.
 
-- Accepted file: PDF
+- Accepted local file: PDF
 - Maximum size: 32 MB
+- Real upload progress is shown
 - Direct public PDF links remain supported
-- Storage paths are preserved for later cleanup
+- Storage provider, object path, and size are preserved for later cleanup
 - Old stored files are deleted only after the replacement record saves successfully
 
 ## Running locally
@@ -311,22 +329,28 @@ The implementation was checked with a local HTTP server and headless Chromium at
 Completed checks:
 
 - All JavaScript files pass `node --check`.
-- Both SQL files parse successfully as PostgreSQL statements.
+- All schema and migration SQL files parse successfully as PostgreSQL statements.
 - Login, logout/session transition, dark/light switching, global search dialog, schema warning, and mobile sidebar were exercised.
 - Dashboard rendering was checked at 320, 375, 414, 768, 1024, 1280, and 1440 px; no document-level horizontal overflow was detected.
 - Every entity list and add/edit form was rendered against intercepted Supabase-shaped fixtures.
 - Author and Category POST payloads, Blog draft POST payload, Comment status PATCH, and Video DELETE confirmation were exercised end to end through the API abstraction.
 - Blog preview, rich editor, two-image submission form, submission approval form, PDF uploader, and provider-safe video preview were opened successfully.
+- Blog hero and PDF file-or-URL controls, the nested Quill image chooser, and 375 px responsive layout were exercised in Chromium.
+- Fixture-backed ImgBB and Supabase Storage uploads produced a Blog payload containing hero, inline-image, PDF provider/path/size, and deletion metadata.
 - Automated axe accessibility checks reported zero violations for the login and dashboard views at desktop and mobile sizes.
 - No uncaught browser page errors occurred in the fixture-backed navigation pass.
 
-Live Supabase CRUD cannot be verified until `supabase/schema.sql` is installed because the configured project currently returns “table not found” for every required entity. No ImgBB test upload was created during QA, avoiding orphaned third-party media. Perform the final live add/edit/delete/upload checklist in a staging project after schema installation.
+The configured project now returns HTTP 200 for all nine required tables after `supabase/schema.sql` was installed. The new Blog media columns require `supabase/migrations/003_blog_media_uploads.sql` on that existing installation. Destructive live CRUD and third-party ImgBB uploads were intentionally not run against production; perform the final add/edit/delete/upload checklist in a staging project after installing the migration.
 
 ## Troubleshooting
 
 ### “Database setup required”
 
 Run `supabase/schema.sql` in the project SQL Editor and then use the Settings database check.
+
+### “Migration needed” or missing Blog media columns
+
+Run `supabase/migrations/003_blog_media_uploads.sql` in Supabase SQL Editor, then reload the dashboard and run the database check again.
 
 ### `401` / `403` saving records
 

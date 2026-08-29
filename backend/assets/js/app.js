@@ -163,9 +163,12 @@
     try {
       const result = await NC.api.schemaProbe();
       const banner = qs('#schema-banner');
-      if (!result.ok && result.missing.length) {
+      if (!result.ok && (result.missing.length || result.mismatched.length)) {
         banner.classList.remove('hidden');
-        banner.querySelector('[data-schema-message]').textContent = `${result.missing.length} required database table${result.missing.length === 1 ? ' is' : 's are'} missing. Run the included Supabase schema before using CRUD features.`;
+        banner.querySelector('strong').textContent = result.missing.length ? 'Database setup required' : 'Database update required';
+        banner.querySelector('[data-schema-message]').textContent = result.missing.length
+          ? `${result.missing.length} required database table${result.missing.length === 1 ? ' is' : 's are'} missing. Run the included Supabase schema before using CRUD features.`
+          : 'Required Blog media columns are missing. Run supabase/migrations/003_blog_media_uploads.sql before saving Blog uploads.';
       } else banner.classList.add('hidden');
     } catch (error) { console.warn('Schema probe failed:', error); }
   }

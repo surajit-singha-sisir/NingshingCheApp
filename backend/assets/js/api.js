@@ -17,6 +17,7 @@
       this.isSchemaMissing = this.status === 404 && (
         this.code === 'PGRST205' || /schema cache|could not find the table/i.test(`${message} ${this.details}`)
       );
+      this.isSchemaMismatch = ['PGRST204', '42703'].includes(this.code) || /could not find.+column|column.+(?:schema cache|does not exist)/i.test(`${message} ${this.details}`);
     }
   }
 
@@ -231,17 +232,22 @@
   }
 
   async function schemaProbe() {
+    const requiredColumns = {
+      blogs: 'id,imgbb_delete_url,image_meta,inline_media,pdf_file_provider,pdf_storage_path,pdf_file_size_mb',
+      submissions: 'id,inline_media'
+    };
     const keys = Object.keys(tables);
     const results = await Promise.all(keys.map(async (key) => {
       try {
-        await list(key, { select: 'id', limit: 1 });
+        await list(key, { select: requiredColumns[key] || 'id', limit: 1 });
         return { key, table: tables[key], ok: true };
       } catch (error) {
         return { key, table: tables[key], ok: false, error };
       }
     }));
     const missing = results.filter((item) => item.error?.isSchemaMissing);
-    return { ok: results.every((item) => item.ok), results, missing };
+    const mismatched = results.filter((item) => item.error?.isSchemaMismatch);
+    return { ok: results.every((item) => item.ok), results, missing, mismatched };
   }
 
   function storageObjectUrl(bucket, path) {
@@ -259,22 +265,34 @@
     if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
       throw new ApiError('Only PDF files can be uploaded to the book library.', { code: 'INVALID_FILE' });
     }
-    if (file.size > NC_CONFIG.imgbb.maxBytes) {
+    if (file.size > supabase.pdfMaxBytes) {
       throw new ApiError('The PDF is larger than the 32 MB upload limit.', { code: 'FILE_TOO_LARGE' });
     }
     const safeName = file.name.normalize('NFKD').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/-+/g, '-');
     const path = `${new Date().getUTCFullYear()}/${NC.utils.uuid()}-${safeName}`;
-    onProgress?.(10);
-    const response = await request(storageObjectUrl(supabase.pdfBucket, path), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/pdf',
-        'x-upsert': 'false'
-      },
-      body: file,
-      timeout: 60000
+    const responseBody = await new Promise((resolve, reject) => {
+      const upload = new XMLHttpRequest();
+      upload.open('POST', storageObjectUrl(supabase.pdfBucket, path));
+      upload.timeout = 60000;
+      upload.responseType = 'json';
+      Object.entries({ ...authHeaders(), 'Content-Type': 'application/pdf', 'x-upsert': 'false' })
+        .forEach(([name, value]) => upload.setRequestHeader(name, value));
+      upload.upload.addEventListener('progress', (event) => {
+        if (event.lengthComputable) onProgress?.(Math.round((event.loaded / event.total) * 100));
+      });
+      upload.addEventListener('load', () => {
+        const body = upload.response || {};
+        if (upload.status >= 200 && upload.status < 300) { onProgress?.(100); resolve(body); return; }
+        reject(new ApiError(body.message || body.error || 'Supabase Storage could not upload this PDF.', {
+          status: upload.status,
+          code: body.error || body.statusCode || 'STORAGE_UPLOAD_ERROR',
+          body
+        }));
+      });
+      upload.addEventListener('error', () => reject(new ApiError('The PDF upload failed. Check your connection and try again.', { code: 'NETWORK_ERROR' })));
+      upload.addEventListener('timeout', () => reject(new ApiError('The PDF upload timed out. Please try again.', { code: 'TIMEOUT' })));
+      upload.send(file);
     });
-    onProgress?.(100);
     return {
       url: storagePublicUrl(supabase.pdfBucket, path),
       path,
@@ -282,7 +300,7 @@
       size: file.size,
       filename: file.name,
       mime: file.type || 'application/pdf',
-      response: response.data
+      response: responseBody
     };
   }
 
@@ -324,6 +342,7 @@
   function userMessage(error, fallback = 'The operation could not be completed.') {
     if (!error) return fallback;
     if (error.isSchemaMissing) return 'The Supabase tables are not installed yet. Run backend/supabase/schema.sql first.';
+    if (error.isSchemaMismatch) return 'The media columns are not installed yet. Run backend/supabase/migrations/003_blog_media_uploads.sql in Supabase.';
     if (error.code === '23505') return 'A record with this unique value already exists.';
     if (error.code === '23503') return 'This record is still used by related content and cannot be deleted.';
     if (error.code === '42501' || error.status === 401 || error.status === 403) return 'You do not have permission to perform this action. Sign in again or review the RLS policies.';

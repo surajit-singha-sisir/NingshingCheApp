@@ -129,7 +129,15 @@
   async function deleteReplacedMedia(oldMedia, newMedia) {
     if (!oldMedia?.delete_url || oldMedia.delete_url === newMedia?.delete_url) return;
     const result = await NC.api.attemptImgBBDelete(oldMedia.delete_url);
-    NC.components.remoteDeleteWarning(result);
+    NC.components.remoteDeleteWarning(result, 'The record was saved, but ImgBB did not confirm deletion of the replaced image. Use the saved deletion page to finish manually.');
+  }
+
+  async function deleteMediaRecords(records = [], warningMessage = '') {
+    const urls = [...new Set(records.map((record) => typeof record === 'string' ? record : record?.delete_url || record?.imgbb_delete_url).filter(Boolean))];
+    if (!urls.length) return [];
+    const results = await Promise.all(urls.map((url) => NC.api.attemptImgBBDelete(url)));
+    results.forEach((result) => NC.components.remoteDeleteWarning(result, warningMessage || 'ImgBB did not confirm deletion of an unused image. Use the saved deletion page to finish manually.'));
+    return results;
   }
 
   function imagePayload(media) {
@@ -160,6 +168,6 @@
 
   NC.crud = Object.freeze({
     ListState, bindPagination, bindSort, sortIcon, save, deleteRecord,
-    deleteReplacedMedia, imagePayload, handleLoadError, isStaleNavigation
+    deleteReplacedMedia, deleteMediaRecords, imagePayload, handleLoadError, isStaleNavigation
   });
 })(window.NC);

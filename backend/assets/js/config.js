@@ -14,7 +14,7 @@
     app: Object.freeze({
       name: 'Ningshing Che',
       subtitle: 'Editorial Command Center',
-      version: '1.0.0',
+      version: '1.1.0',
       websiteUrl: 'https://ningshingche.com',
       locale: 'en-BD',
       timeZone: 'Asia/Dhaka',
@@ -31,7 +31,8 @@
       publishableKey: 'sb_publishable_jqJACnQHmCMcGjt0kG6Sug_ddknIbAA',
       restPath: '/rest/v1',
       storagePath: '/storage/v1',
-      pdfBucket: 'pdf-books'
+      pdfBucket: 'pdf-books',
+      pdfMaxBytes: 32 * 1024 * 1024
     }),
 
     imgbb: Object.freeze({
