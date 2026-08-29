@@ -56,7 +56,9 @@ backend/
 │       ├── settings.js
 │       └── app.js             # Shell, routing, theme, search
 ├── imports/
-│   └── ningshing-che-categories-bangla.csv  # Ready-to-import Bengali categories
+│   ├── ningshing-che-authors.csv             # Ready-to-import 27-author dataset
+│   ├── ningshing-che-author-sources.csv      # Profile/image provenance audit
+│   └── ningshing-che-categories-bangla.csv   # Ready-to-import Bengali categories
 └── supabase/
     ├── schema.sql
     └── migrations/
@@ -233,7 +235,13 @@ ImgBB’s upload API is for images, not PDF documents. Local PDF files therefore
 
 Spreadsheet import is available for **Authors, Blogs, Categories, Comments, Galleries, PDF Books, Submit Blogs, and Videos**. Settings are intentionally excluded.
 
-A ready-to-import UTF-8 CSV containing the supplied Bengali category list is included at `imports/ningshing-che-categories-bangla.csv`. Its slugs use URL-safe hyphens for spaces, and the shared slug normalizer preserves Bengali combining marks.
+Ready-to-import UTF-8 CSV datasets are included in `imports/`:
+
+- `ningshing-che-authors.csv` contains the 27 authors from the public **আমার লেখক পারেঙ** carousel in the requested order. Each individual profile was retrieved on 2026-08-30; names, designation/byline text, full available biography, verification state, and the profile page's original image URL were preserved. Biography markup is compact Quill-compatible HTML. The source site exposes no separate location field, so `location` remains blank rather than being inferred from biography or designation text.
+- `ningshing-che-author-sources.csv` records each profile URL, image URL and host, HTTP validation status, biography availability, and source exceptions. Sixteen profile images are Blogger-hosted, ten are served by the site's GitHub Pages repository, and the **নিংশিং চে** logo is served by GitHub raw content. Those 11 non-Blogger URLs are the addresses exposed by the live profiles and were not replaced with invented Blogger URLs. **কুঙ্গ থাঙ** uses the Blogger-hosted placeholder supplied by the live profile. Five profiles render no biography (`None`), so their import descriptions are intentionally blank.
+- `ningshing-che-categories-bangla.csv` contains the supplied Bengali category list. Its slugs use URL-safe hyphens for spaces, and the shared slug normalizer preserves Bengali combining marks.
+
+All 27 author profile pages and all 27 distinct profile-image URLs returned HTTP 200 during validation. The primary author CSV uses only the six supported Author headers, so it imports without ignored-column warnings; the separate source audit retains provenance that is not part of the Supabase Author schema.
 
 Two workflows are provided:
 
@@ -410,6 +418,8 @@ Completed checks:
 - Login, logout/session transition, dark/light switching, global search dialog, schema warning, and mobile sidebar were exercised.
 - Dashboard rendering was checked at 320, 375, 414, 768, 1024, 1280, and 1440 px; no document-level horizontal overflow was detected.
 - Every entity list and add/edit form was rendered against intercepted Supabase-shaped fixtures.
+- The 27-author CSV was exercised through the Author bulk importer: all 27 rows were ready, with zero invalid rows, zero in-file duplicates, and no ignored headers. The complete runner produced 27 intercepted Author inserts, and first-row Add-form population preserved Sukanta Singha's Blogger image URL and formatted Quill biography without sending production requests.
+- All 27 source profile pages and all 27 distinct source profile images were retrieved successfully; image payloads were decoded as valid PNG or JPEG files.
 - Author and Category POST payloads, Blog draft POST payload, Comment status PATCH, and Video DELETE confirmation were exercised end to end through the API abstraction.
 - Blog preview, rich editor, two-image submission form, submission approval form, PDF uploader, and provider-safe video preview were opened successfully.
 - Blog hero and PDF file-or-URL controls, the nested Quill image chooser, and 375 px responsive layout were exercised in Chromium.
