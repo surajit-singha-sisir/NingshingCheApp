@@ -57,7 +57,7 @@ backend/
 │       └── app.js             # Shell, routing, theme, search
 ├── imports/
 │   ├── ningshing-che-authors.csv             # Ready-to-import 27-author dataset
-│   ├── ningshing-che-author-sources.csv      # Profile/image provenance audit
+│   ├── ningshing-che-author-sources.csv      # Complete profile/image provenance audit
 │   └── ningshing-che-categories-bangla.csv   # Ready-to-import Bengali categories
 └── supabase/
     ├── schema.sql
@@ -238,7 +238,7 @@ Spreadsheet import is available for **Authors, Blogs, Categories, Comments, Gall
 Ready-to-import UTF-8 CSV datasets are included in `imports/`:
 
 - `ningshing-che-authors.csv` contains the 27 authors from the public **আমার লেখক পারেঙ** carousel in the requested order. Each individual profile was retrieved on 2026-08-30; names, designation/byline text, full available biography, verification state, and the profile page's original image URL were preserved. Biography markup is compact Quill-compatible HTML. The source site exposes no separate location field, so `location` remains blank rather than being inferred from biography or designation text.
-- `ningshing-che-author-sources.csv` records each profile URL, image URL and host, HTTP validation status, biography availability, and source exceptions. Sixteen profile images are Blogger-hosted, ten are served by the site's GitHub Pages repository, and the **নিংশিং চে** logo is served by GitHub raw content. Those 11 non-Blogger URLs are the addresses exposed by the live profiles and were not replaced with invented Blogger URLs. **কুঙ্গ থাঙ** uses the Blogger-hosted placeholder supplied by the live profile. Five profiles render no biography (`None`), so their import descriptions are intentionally blank.
+- `ningshing-che-author-sources.csv` is the comprehensive provenance copy: it repeats every author's designation, location, full available description, verification state, and profile-image URL, then adds the exact profile URL, image host, HTTP validation status, biography availability, and source exceptions. Sixteen profile images are Blogger-hosted, ten are served by the site's GitHub Pages repository, and the **নিংশিং চে** logo is served by GitHub raw content. Those 11 non-Blogger URLs are the addresses exposed by the live profiles and were not replaced with invented Blogger URLs. **কুঙ্গ থাঙ** uses the Blogger-hosted placeholder supplied by the live profile. Five profiles render no biography (`None`), so their import descriptions are intentionally blank.
 - `ningshing-che-categories-bangla.csv` contains the supplied Bengali category list. Its slugs use URL-safe hyphens for spaces, and the shared slug normalizer preserves Bengali combining marks.
 
 All 27 author profile pages and all 27 distinct profile-image URLs returned HTTP 200 during validation. The primary author CSV uses only the six supported Author headers, so it imports without ignored-column warnings; the separate source audit retains provenance that is not part of the Supabase Author schema.
