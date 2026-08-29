@@ -108,7 +108,7 @@
       .trim()
       .toLocaleLowerCase()
       .replace(/[’'`]/g, '')
-      .replace(/[^\p{Letter}\p{Number}]+/gu, '-')
+      .replace(/[^\p{Letter}\p{Mark}\p{Number}]+/gu, '-')
       .replace(/^-+|-+$/g, '')
       .replace(/-{2,}/g, '-');
   }

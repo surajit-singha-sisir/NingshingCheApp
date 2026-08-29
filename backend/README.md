@@ -55,6 +55,8 @@ backend/
 │       ├── videos.js
 │       ├── settings.js
 │       └── app.js             # Shell, routing, theme, search
+├── imports/
+│   └── ningshing-che-categories-bangla.csv  # Ready-to-import Bengali categories
 └── supabase/
     ├── schema.sql
     └── migrations/
@@ -230,6 +232,8 @@ ImgBB’s upload API is for images, not PDF documents. Local PDF files therefore
 ## CSV and Excel imports
 
 Spreadsheet import is available for **Authors, Blogs, Categories, Comments, Galleries, PDF Books, Submit Blogs, and Videos**. Settings are intentionally excluded.
+
+A ready-to-import UTF-8 CSV containing the supplied Bengali category list is included at `imports/ningshing-che-categories-bangla.csv`. Its slugs use URL-safe hyphens for spaces, and the shared slug normalizer preserves Bengali combining marks.
 
 Two workflows are provided:
 
