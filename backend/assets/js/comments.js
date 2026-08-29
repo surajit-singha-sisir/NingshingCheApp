@@ -23,7 +23,7 @@
     const body = rows.map((record) => `
       <tr>
         <td data-label="Comment"><div class="comment-cell"><strong>${escapeHTML(record.name || 'Anonymous')}</strong><p>${escapeHTML(NC.utils.truncate(record.content, 110))}</p><small>${escapeHTML(record.email || record.phone || 'No contact details')}</small></div></td>
-        <td data-label="Blog"><button type="button" class="table-link line-clamp-2" data-open-blog="${escapeHTML(record.blog_id)}">${escapeHTML(blogTitle(record))}</button></td>
+        <td data-label="Blog">${NC.auth.canAccess('blogs') ? `<button type="button" class="table-link line-clamp-2" data-open-blog="${escapeHTML(record.blog_id)}">${escapeHTML(blogTitle(record))}</button>` : `<span class="line-clamp-2">${escapeHTML(blogTitle(record))}</span>`}</td>
         <td data-label="Status">${NC.components.statusBadge(record.status || 'Unpublish')}</td>
         <td data-label="Received"><time datetime="${escapeHTML(record.created_at || '')}">${escapeHTML(formatDateTime(record.created_at))}</time></td>
         <td data-label="Actions" class="text-right">${NC.components.rowActions([

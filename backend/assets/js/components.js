@@ -59,9 +59,11 @@
     if (activeModal) closeModal('replace');
     lastFocused = document.activeElement;
     const root = document.createElement('div');
+    root.id = 'modal-root';
     root.className = 'modal-root';
+    root.dataset.modalId = options.id || 'current';
     root.innerHTML = `
-      <div class="modal-backdrop" data-modal-close aria-hidden="true"></div>
+      <div class="modal-backdrop" ${options.dismissible === false ? '' : 'data-modal-close'} aria-hidden="true"></div>
       <section class="modal-panel modal-${escapeHTML(options.size || 'md')}" role="dialog" aria-modal="true" aria-labelledby="modal-title-${escapeHTML(options.id || 'current')}">
         <div class="modal-header">
           <div class="min-w-0">
@@ -69,7 +71,7 @@
             <h2 id="modal-title-${escapeHTML(options.id || 'current')}" class="modal-title">${escapeHTML(options.title || '')}</h2>
             ${options.description ? `<p class="modal-description">${escapeHTML(options.description)}</p>` : ''}
           </div>
-          <button type="button" class="icon-button shrink-0" data-modal-close aria-label="Close dialog"><i class="fa-regular fa-xmark" aria-hidden="true"></i></button>
+          ${options.dismissible === false ? '' : '<button type="button" class="icon-button shrink-0" data-modal-close aria-label="Close dialog"><i class="fa-regular fa-xmark" aria-hidden="true"></i></button>'}
         </div>
         <div class="modal-body">${options.content || ''}</div>
         ${options.footer === false ? '' : `<div class="modal-footer">${options.footer || '<button type="button" class="btn btn-secondary" data-modal-close>Close</button>'}</div>`}

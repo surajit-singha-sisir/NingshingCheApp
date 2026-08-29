@@ -8,13 +8,13 @@
    * - The Supabase value below is a publishable browser key, never a service key.
    * - ImgBB requires its upload key in browser requests; restrict/rotate it in
    *   the provider dashboard if the project is ever transferred.
-   * - Demo credentials protect the UI only. See README and production RLS SQL.
+   * - Migration 004 validates dashboard credentials and permissions in Supabase.
    */
   window.NC_CONFIG = Object.freeze({
     app: Object.freeze({
       name: 'Ningshing Che',
       subtitle: 'Editorial Command Center',
-      version: '1.2.2',
+      version: '1.3.0',
       websiteUrl: 'https://ningshingche.com',
       locale: 'en-BD',
       timeZone: 'Asia/Dhaka',
@@ -45,13 +45,13 @@
       ])
     }),
 
+    // Migration-only fallback. Once migration 004 installs dashboard_login,
+    // credentials and roles come exclusively from Supabase.
     auth: Object.freeze({
       username: 'admin',
-      // SHA-256("admin123"). Change this digest rather than duplicating the
-      // plain password throughout the application.
       passwordHash: '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9',
       displayName: 'Chief Editor',
-      role: 'Administrator'
+      role: 'Super Admin'
     }),
 
     tables: Object.freeze({
@@ -77,7 +77,8 @@
       { id: 'submissions', label: 'Submit Blogs', icon: 'fa-file-pen', group: 'content' },
       { id: 'videos', label: 'Videos', icon: 'fa-video', group: 'content' },
       { id: 'analytics', label: 'Analytics', icon: 'fa-chart-mixed', group: 'system' },
-      { id: 'settings', label: 'Settings', icon: 'fa-gear', group: 'system' }
+      { id: 'settings', label: 'Settings', icon: 'fa-gear', group: 'system' },
+      { id: 'access-control', label: 'Users & Roles', icon: 'fa-user-shield', group: 'system' }
     ])
   });
 

@@ -1,7 +1,8 @@
 -- Ningshing Che Dashboard — initial Supabase schema
 -- Generated after a read-only schema probe on 2026-08-29 found none of the
 -- required public tables. This migration is additive: it does not drop tables
--- or existing rows. Review in a staging project before running in production.
+-- or existing rows. Re-runs preserve migration 004 RBAC helpers and policies.
+-- Review in a staging project before running in production.
 
 begin;
 
@@ -292,23 +293,29 @@ begin
 end $$;
 
 -- Dashboard request helper -------------------------------------------------
--- DEMO SECURITY ONLY: the static dashboard sends a digest after its local
--- username/password check. This is intentionally separate from a service-role
--- key, but it is still discoverable in browser code and is not production auth.
--- Replace this helper using migrations/002_production_rls.sql when Supabase
--- Auth has been configured.
-create or replace function public.is_dashboard_request()
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select coalesce(
-    nullif(current_setting('request.headers', true), '')::jsonb ->> 'x-dashboard-token',
-    ''
-  ) = 'bf6b5bdb74c79ece9fc0ad0ac9fb0359f9555d4f35a83b2e6ec69ae99e09603d';
-$$;
+-- Fresh installations temporarily use the version-1 compatibility digest so
+-- the static UI is not locked out before migration 004 is applied. If the RBAC
+-- session helper already exists, a schema re-run must never overwrite it.
+do $dashboard_auth_guard$
+begin
+  if to_regprocedure('public.dashboard_current_user_id()') is null then
+    execute $dashboard_auth_function$
+      create or replace function public.is_dashboard_request()
+      returns boolean
+      language sql
+      stable
+      security definer
+      set search_path = public
+      as $body$
+        select coalesce(
+          nullif(current_setting('request.headers', true), '')::jsonb ->> 'x-dashboard-token',
+          ''
+        ) = 'bf6b5bdb74c79ece9fc0ad0ac9fb0359f9555d4f35a83b2e6ec69ae99e09603d';
+      $body$;
+    $dashboard_auth_function$;
+  end if;
+end
+$dashboard_auth_guard$;
 
 -- Transactional submission-to-blog conversion. The relationship IDs remain
 -- authoritative; snapshot fields are populated by the blog trigger.
@@ -327,9 +334,15 @@ declare
   selected_author public.authors;
   created_blog public.blogs;
   final_slug text;
+  authorized boolean;
 begin
-  if not public.is_dashboard_request() then
-    raise exception 'Dashboard authorization required' using errcode = '42501';
+  if to_regprocedure('public.dashboard_has_permission(text)') is not null then
+    execute 'select public.dashboard_has_permission($1)' into authorized using 'submissions';
+  else
+    authorized := public.is_dashboard_request();
+  end if;
+  if not coalesce(authorized, false) then
+    raise exception 'Submit Blogs authorization required' using errcode = '42501';
   end if;
 
   select * into submission
@@ -419,20 +432,25 @@ alter table public.submitted_blogs enable row level security;
 alter table public.videos enable row level security;
 alter table public.settings enable row level security;
 
--- Re-running this script updates policies without touching content.
+-- Re-running this script updates compatibility policies without touching
+-- content. When migration 004 exists, remove (and never recreate) the broad
+-- compatibility policy; migration 004's menu-specific policies stay intact.
 do $$
 declare
   t text;
+  rbac_installed boolean := to_regprocedure('public.dashboard_has_permission(text)') is not null;
 begin
   foreach t in array array[
     'authors','categories','blogs','comments','galleries',
     'pdf_books','submitted_blogs','videos','settings'
   ] loop
     execute format('drop policy if exists %I on public.%I', t || '_dashboard_all', t);
-    execute format(
-      'create policy %I on public.%I for all to anon, authenticated using (public.is_dashboard_request()) with check (public.is_dashboard_request())',
-      t || '_dashboard_all', t
-    );
+    if not rbac_installed then
+      execute format(
+        'create policy %I on public.%I for all to anon, authenticated using (public.is_dashboard_request()) with check (public.is_dashboard_request())',
+        t || '_dashboard_all', t
+      );
+    end if;
   end loop;
 end $$;
 
@@ -474,20 +492,26 @@ drop policy if exists pdf_books_public_storage_read on storage.objects;
 create policy pdf_books_public_storage_read on storage.objects
 for select to anon, authenticated using (bucket_id = 'pdf-books');
 
-drop policy if exists pdf_books_dashboard_storage_insert on storage.objects;
-create policy pdf_books_dashboard_storage_insert on storage.objects
-for insert to anon, authenticated
-with check (bucket_id = 'pdf-books' and public.is_dashboard_request());
+-- Keep schema re-runs compatible with migration 004's menu-specific Storage
+-- authorization instead of downgrading it to the broad setup helper.
+do $storage_policy_guard$
+declare
+  rbac_installed boolean := to_regprocedure('public.dashboard_has_any_permission(text[])') is not null;
+begin
+  drop policy if exists pdf_books_dashboard_storage_insert on storage.objects;
+  drop policy if exists pdf_books_dashboard_storage_update on storage.objects;
+  drop policy if exists pdf_books_dashboard_storage_delete on storage.objects;
 
-drop policy if exists pdf_books_dashboard_storage_update on storage.objects;
-create policy pdf_books_dashboard_storage_update on storage.objects
-for update to anon, authenticated
-using (bucket_id = 'pdf-books' and public.is_dashboard_request())
-with check (bucket_id = 'pdf-books' and public.is_dashboard_request());
-
-drop policy if exists pdf_books_dashboard_storage_delete on storage.objects;
-create policy pdf_books_dashboard_storage_delete on storage.objects
-for delete to anon, authenticated
-using (bucket_id = 'pdf-books' and public.is_dashboard_request());
+  if rbac_installed then
+    execute 'create policy pdf_books_dashboard_storage_insert on storage.objects for insert to anon, authenticated with check (bucket_id = ''pdf-books'' and public.dashboard_has_any_permission(array[''blogs'',''books'']::text[]))';
+    execute 'create policy pdf_books_dashboard_storage_update on storage.objects for update to anon, authenticated using (bucket_id = ''pdf-books'' and public.dashboard_has_any_permission(array[''blogs'',''books'']::text[])) with check (bucket_id = ''pdf-books'' and public.dashboard_has_any_permission(array[''blogs'',''books'']::text[]))';
+    execute 'create policy pdf_books_dashboard_storage_delete on storage.objects for delete to anon, authenticated using (bucket_id = ''pdf-books'' and public.dashboard_has_any_permission(array[''blogs'',''books'']::text[]))';
+  else
+    execute 'create policy pdf_books_dashboard_storage_insert on storage.objects for insert to anon, authenticated with check (bucket_id = ''pdf-books'' and public.is_dashboard_request())';
+    execute 'create policy pdf_books_dashboard_storage_update on storage.objects for update to anon, authenticated using (bucket_id = ''pdf-books'' and public.is_dashboard_request()) with check (bucket_id = ''pdf-books'' and public.is_dashboard_request())';
+    execute 'create policy pdf_books_dashboard_storage_delete on storage.objects for delete to anon, authenticated using (bucket_id = ''pdf-books'' and public.is_dashboard_request())';
+  end if;
+end
+$storage_policy_guard$;
 
 commit;

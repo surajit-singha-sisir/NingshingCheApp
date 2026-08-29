@@ -7,7 +7,9 @@ The dashboard is located entirely inside `backend/`, as requested.
 ## Highlights
 
 - Dark-first editorial interface with a persistent light theme
-- Expiring client-side administrator session and protected dashboard routes
+- Database-backed dashboard users with bcrypt password hashes and expiring, revocable, SHA-256-hashed sessions
+- Custom roles with menu-level authorization, direct-route denial, and permission-aware Supabase RLS
+- Super Admin user/role management plus secure self-service username, display-name, and password updates
 - Real Supabase CRUD for authors, blogs, categories, comments, galleries, PDF books, public submissions, videos, and site settings
 - Relationship-aware blog editing with categories and authors
 - WYSIWYG author biography, article, and submission editors with sanitized HTML/source mode
@@ -37,7 +39,7 @@ backend/
 │   └── js/
 │       ├── config.js          # Central browser-safe configuration
 │       ├── utils.js           # Formatting, validation, sanitization helpers
-│       ├── auth.js            # Demo session abstraction and expiry
+│       ├── auth.js            # Database-backed login/session/permission client
 │       ├── api.js             # Central Supabase REST/Storage API layer
 │       ├── components.js      # Modal, toast, table, badges, states
 │       ├── media.js           # ImgBB, PDF, and safe video previews
@@ -54,7 +56,8 @@ backend/
 │       ├── submissions.js
 │       ├── videos.js
 │       ├── settings.js
-│       └── app.js             # Shell, routing, theme, search
+│       ├── access-control.js  # Super Admin users, roles, and own credentials
+│       └── app.js             # Authorized shell, routing, theme, search
 ├── imports/
 │   ├── ningshing-che-authors.csv             # Ready-to-import 27-author dataset
 │   ├── ningshing-che-author-sources.csv      # Complete profile/image provenance audit
@@ -62,8 +65,9 @@ backend/
 └── supabase/
     ├── schema.sql
     └── migrations/
-        ├── 002_production_rls.sql
-        └── 003_blog_media_uploads.sql
+        ├── 002_production_rls.sql          # Legacy only; never run after 004
+        ├── 003_blog_media_uploads.sql
+        └── 004_dashboard_access_control.sql
 ```
 
 ## Database setup
@@ -88,9 +92,9 @@ The project owner subsequently installed `schema.sql`, and a second read-only RE
 
 1. Sign in to the correct [Supabase dashboard](https://supabase.com/dashboard).
 2. Open **SQL Editor** for the project.
-3. Review `supabase/schema.sql`.
-4. Run the complete file.
-5. Return to this dashboard and open **Settings → Authentication & database → Run check**.
+3. Review and run the complete `supabase/schema.sql` file.
+4. Review and run `supabase/migrations/004_dashboard_access_control.sql` (the current base schema already contains migration 003's media columns).
+5. Sign in, replace the initial Super Admin password, and open **Settings → Authentication & database → Run check**.
 
 ### Upgrade an existing dashboard database
 
@@ -102,6 +106,27 @@ If `schema.sql` was installed before Blog media uploads were added, run the comp
 - Updated submission conversion logic that transfers hero and inline-image metadata to the Blog
 
 The dashboard database check also verifies these columns and reports **Migration needed** until the migration is installed.
+
+Then run the complete `supabase/migrations/004_dashboard_access_control.sql` file. Migration 004 is the current authentication and authorization layer. It additively creates:
+
+- `dashboard_roles`, `dashboard_users`, and `dashboard_sessions`
+- bcrypt password hashing inside PostgreSQL
+- random browser session tokens whose SHA-256 hashes alone are retained in Supabase
+- 8-hour standard and 7-day remembered sessions, revocation, and five-attempt temporary lockout
+- customizable menu permissions with a protected Super Admin role
+- Super Admin-only user/role RPCs and current-password-protected self-credential updates
+- menu-specific write and private-read RLS policies plus permission-aware PDF Storage policies
+- safeguards against deleting, disabling, or demoting the final active Super Admin
+
+For an existing installation, use this order:
+
+1. Back up the Supabase database and Storage objects.
+2. Run `003_blog_media_uploads.sql` if it has not already been installed.
+3. Run `004_dashboard_access_control.sql`.
+4. Sign in as `admin` / `admin123` only on a fresh access-control installation and replace that password immediately.
+5. Open **Settings → Authentication & database → Run check**.
+
+`002_production_rls.sql` belongs to the older fixed Supabase Auth design. **Do not run migration 002 after migration 004**; the legacy migration now detects migration 004 and aborts before it can replace the dashboard-session helper. The current full `schema.sql` includes downgrade guards and was rerun safely in QA, but numbered migrations remain the preferred upgrade path; never paste an older standalone demo-auth policy snippet over migration 004.
 
 The initial schema is additive and uses `CREATE TABLE IF NOT EXISTS`; it does not intentionally drop content tables or rows. It creates:
 
@@ -140,48 +165,61 @@ Only a **publishable browser key** belongs here. Never add any of the following 
 
 `api.js` centralizes REST headers, filters, CRUD, RPC calls, Storage uploads, timeouts, and user-friendly API errors.
 
-## Authentication
+## Authentication and access control
 
-Initial demo access:
+### Initial Super Admin
+
+On the first run of migration 004, and only when `dashboard_users` is empty, Supabase creates:
 
 ```text
 Username: admin
 Password: admin123
+Role: Super Admin
 ```
 
-`auth.js` performs a centralized SHA-256 comparison, creates a random expiring session record, and stores it in:
+The account is marked `must_change_password`. The dashboard opens a non-dismissible credential dialog after login until a new password of at least eight characters is saved. Change the initial password before sharing the dashboard URL. Re-running migration 004 does not recreate or reset existing users.
+
+### Roles and menu permissions
+
+Migration 004 seeds five customizable role choices:
+
+| Role | Initial menus |
+| --- | --- |
+| Super Admin | Every dashboard menu, including Users & Roles |
+| Administrator | All editorial, Analytics, and Settings menus |
+| Editor | Dashboard plus editorial content menus |
+| Moderator | Dashboard, Comments, and Submit Blogs |
+| Analyzer | Dashboard and Analytics |
+
+A Super Admin can create additional roles, rename/edit all non-Super-Admin roles, assign visible menus, create or disable login users, assign roles, and reset another user's password. Dashboard is always included in a role; Users & Roles is reserved for the protected Super Admin role. System roles may be customized but not deleted. Custom roles can be deleted only when no users are assigned.
+
+Menu restrictions are not cosmetic:
+
+- the sidebar, global search, dashboard metrics/actions, and landing-page choices are filtered;
+- a direct `#/route` URL renders an Access denied state;
+- Supabase RLS requires the matching menu permission for inserts, updates, and deletes;
+- private reads require the matching menu or Analytics permission (public-site read policies remain intentionally public);
+- PDF Storage writes require Blogs or PDF Books access;
+- role edits revoke every active session assigned to that role so stale permissions stop at the database immediately.
+
+The final active Super Admin cannot be demoted, disabled, or deleted. Those checks are serialized in PostgreSQL to remain safe across concurrent requests.
+
+### Session and password design
+
+`dashboard_login(...)` verifies bcrypt password hashes inside PostgreSQL. After a successful login it returns a one-time random token; only the token's SHA-256 hash is stored in `dashboard_sessions`. The raw token is held in:
 
 - `sessionStorage` for the standard 8-hour session, or
 - `localStorage` for the optional 7-day remembered session.
 
-All routes return to Login after expiration. The plain password is not stored in session data.
+Authenticated REST and RPC requests send the token in `x-dashboard-session`. Supabase validates expiration, revocation, account status, temporary lock state, role, and menu permission. Five failed login attempts lock the account for 15 minutes. Logout revokes the server session before clearing the browser copy.
 
-### Important security limitation
+Any signed-in user can select **My login** to update their display name, username, or password after confirming the current password. Username/password changes revoke that user's other active sessions. Password and session hashes are never returned to the browser.
 
-This is **client-side demo authentication**. Anyone who can inspect browser code can bypass a purely client-side gate. The initial schema uses a demo request digest so CRUD works without exposing a service-role key, but that digest is also discoverable by a determined browser user.
+### Compatibility upgrade behavior
 
-Before placing the dashboard at a public URL:
+Before migration 004 exists, the client recognizes the missing `dashboard_login` RPC and temporarily uses the former version-1 demo login so an existing installation is not locked out during deployment. The **Users & Roles** page then displays the exact migration path. As soon as `dashboard_session` is available, legacy sessions are rejected and the fallback cannot be used to bypass database login.
 
-1. Create administrator/editor users with Supabase Auth.
-2. Put authorization roles in `app_metadata.role`.
-3. Update `auth.js` to use Supabase email/password authentication and store the returned access token.
-4. Apply `supabase/migrations/002_production_rls.sql`.
-5. Remove the demo credential hint from `index.html`.
-6. Rotate the publishable and ImgBB keys if they were used in an untrusted environment.
-
-The production migration replaces the demo header check with `auth.uid()` and JWT role checks without deleting content.
-
-### Changing demo credentials
-
-For temporary local/staging use only:
-
-1. Generate SHA-256 of the new password and replace `auth.passwordHash` in `assets/js/config.js`.
-2. Generate SHA-256 of `username:new-password`.
-3. Replace the expected digest in `public.is_dashboard_request()` inside `supabase/schema.sql`, then run only that function definition in SQL Editor.
-4. Change `auth.username` if required.
-5. Sign out and clear old browser sessions.
-
-Do not treat this as production security. Prefer Supabase Auth rather than maintaining demo credentials.
+This fallback is migration compatibility, not the target security model. Install migration 004 promptly. Do not expose a service-role key, database password, or Supabase management token in this static application.
 
 ## ImgBB setup
 
@@ -366,7 +404,7 @@ Approval calls the transactional `approve_submission(...)` database function. It
 5. Preserves thumbnail, content title, and article content.
 6. Marks the submission Approved and stores `converted_blog_id`.
 
-The frontend has a compatibility fallback if the RPC has not yet been installed, but the SQL RPC is preferred because it is atomic.
+Migration 004 requires **Submit Blogs** permission before the RPC can run, and its Author/Blog/Submission writes still pass the matching RLS policies. Assign all relevant editorial menus to roles that perform approvals. The frontend has a compatibility fallback if the RPC has not yet been installed, but the SQL RPC is preferred because it is atomic.
 
 ## Theme and dashboard preferences
 
@@ -390,7 +428,7 @@ Deploy the contents of `backend/` as the site root. Then:
 1. Verify Supabase project CORS/origin settings.
 2. Use HTTPS.
 3. Configure a strict Content Security Policy that permits only the required CDNs, Supabase project, ImgBB, and supported video providers.
-4. Complete the Supabase Auth migration before exposing the dashboard publicly.
+4. Install migrations 003 and 004, change the initial Super Admin password, and test each role before exposing the dashboard publicly.
 5. Keep the dashboard on a restricted admin subdomain where practical.
 
 ## Data handling guarantees
@@ -414,7 +452,12 @@ The implementation was checked with a local HTTP server and headless Chromium at
 Completed checks:
 
 - All JavaScript files pass `node --check`.
-- All schema and migration SQL files parse successfully as PostgreSQL statements.
+- All schema and migration SQL files parse successfully with PostgreSQL's grammar.
+- `schema.sql`, migration 003, and migration 004 executed successfully on a clean PostgreSQL 17 database; migration 004 and the full guarded base schema were then rerun after populated/customized RBAC data without resetting users, roles, helpers, or policies.
+- PostgreSQL integration assertions covered bcrypt login, hashed session tokens, session validation/revocation, five-attempt lockout, role allow-listing, self-credential changes, protected private tables, menu-specific RLS, Analytics reads, PDF Storage writes, role-session revocation, and submission-approval authorization.
+- A concurrent two-Super-Admin cross-disable test forced both requests to queue on the advisory guard; one succeeded, the waiting request re-authorized and failed, and exactly one active Super Admin remained.
+- Fixture-backed Chromium checks covered Super Admin login/user/role CRUD, the mandatory password-change dialog, role-filtered navigation/search/dashboard requests, direct-route denial, Analyzer restrictions, cross-menu moderation links/actions, Categories-only request filtering, legacy migration guidance, and Access Control layouts at desktop and 375 px without horizontal overflow.
+- Automated axe scans reported zero violations for both the mandatory credential dialog and the populated Access Control page; the configured Supabase gateway's live CORS preflight explicitly accepted `x-dashboard-session`.
 - Login, logout/session transition, dark/light switching, global search dialog, schema warning, and mobile sidebar were exercised.
 - Dashboard rendering was checked at 320, 375, 414, 768, 1024, 1280, and 1440 px; no document-level horizontal overflow was detected.
 - Every entity list and add/edit form was rendered against intercepted Supabase-shaped fixtures.
@@ -433,7 +476,7 @@ Completed checks:
 - Automated axe accessibility checks reported zero violations for the login and dashboard views at desktop and mobile sizes.
 - No uncaught browser page errors occurred in the fixture-backed navigation pass or spreadsheet-import pass.
 
-The configured project now returns HTTP 200 for all nine required tables after `supabase/schema.sql` was installed. The new Blog media columns require `supabase/migrations/003_blog_media_uploads.sql` on that existing installation. Destructive live CRUD and third-party ImgBB uploads were intentionally not run against production; perform the final add/edit/delete/upload checklist in a staging project after installing the migration.
+The configured project returns HTTP 200 for all nine required tables after `supabase/schema.sql` was installed. On that existing installation, the project owner must still apply migration 003 (if pending) and migration 004 in Supabase SQL Editor; a publishable browser key cannot execute DDL. Destructive live CRUD, live credential creation, and third-party ImgBB uploads were intentionally not run against production. Perform the final add/edit/delete/upload and multi-role checklist in a staging project after installing both migrations.
 
 ## Troubleshooting
 
@@ -445,11 +488,20 @@ Run `supabase/schema.sql` in the project SQL Editor and then use the Settings da
 
 Run `supabase/migrations/003_blog_media_uploads.sql` in Supabase SQL Editor, then reload the dashboard and run the database check again.
 
-### `401` / `403` saving records
+### “Security migration required” or Users & Roles shows setup instructions
 
-- Sign out and sign in again.
-- Confirm the initial RLS helper was installed.
-- If production RLS is active, authenticate through Supabase Auth with an allowed role.
+Run `supabase/migrations/004_dashboard_access_control.sql` in Supabase SQL Editor after migration 003, then sign out and sign in again.
+
+### `401` / `403` or RLS error while saving records
+
+- Sign out and sign in again so a revoked or changed role gets a fresh session.
+- Ask a Super Admin to confirm that the account is active and its role includes the relevant menu.
+- Confirm migration 004 was run completely and that migration 002 was not run afterward.
+- For submission approval, remember that conversion writes a submission, Blog, and potentially Author record; assign the relevant editorial menus.
+
+### Initial `admin` login does not work
+
+The `admin` / `admin123` account is inserted only when migration 004 finds no dashboard users. It is not recreated on reruns. Use an existing Super Admin account; if all credentials are lost, recover access directly through a carefully reviewed Supabase SQL Editor operation rather than placing a privileged key in the browser.
 
 ### Image upload fails
 
@@ -478,10 +530,10 @@ Check whether the browser or content blocker is blocking the pinned CDN URLs.
 
 ## Production recommendations
 
-- Replace demo login with Supabase Auth immediately.
-- Require MFA for administrators if available.
-- Store roles in `app_metadata`, not user-editable profile fields.
-- Add audit logs for destructive and publishing actions.
+- Install migration 004 and replace the seeded password before public use; never rely on compatibility login.
+- Add MFA through a trusted authentication tier if the deployment's risk profile requires it.
+- Keep role/user changes inside the protected database RPCs; never make private access tables browser-readable.
+- Add audit logs for login, role changes, destructive actions, and publishing actions.
 - Add rate limits and CAPTCHA to public comment/submission forms.
 - Run ImgBB deletion through a trusted server/Edge Function if automatic deletion is essential.
 - Add automated browser tests against a staging Supabase project.

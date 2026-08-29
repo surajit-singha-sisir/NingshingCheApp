@@ -12,6 +12,14 @@
     return Boolean(record?.converted_blog_id) || ['Approved', 'Published'].includes(record?.status);
   }
 
+  function canConvertSubmission() {
+    return NC.auth.canAccess('submissions') && NC.auth.canAccess('blogs') && NC.auth.canAccess('authors');
+  }
+
+  function approvalAvailable(record) {
+    return canConvertSubmission() && !hasTransferredMedia(record) && record?.status !== 'Rejected';
+  }
+
   function renderList() {
     const content = root.querySelector('[data-submissions-content]');
     const { rows, total } = state.paged();
@@ -32,7 +40,7 @@
           { action: 'view', id: record.id, label: 'View submission', icon: 'fa-eye' },
           { action: 'preview', id: record.id, label: 'Preview article', icon: 'fa-file-magnifying-glass' },
           { action: 'edit', id: record.id, label: 'Edit submission', icon: 'fa-pen' },
-          ...(record.status !== 'Approved' && record.status !== 'Published' ? [{ action: 'approve', id: record.id, label: 'Approve and convert to blog', icon: 'fa-circle-check' }] : []),
+          ...(approvalAvailable(record) ? [{ action: 'approve', id: record.id, label: 'Approve and convert to blog', icon: 'fa-circle-check' }] : []),
           ...(record.status !== 'Rejected' && !hasTransferredMedia(record) ? [{ action: 'reject', id: record.id, label: 'Reject submission', icon: 'fa-circle-xmark', danger: true }] : []),
           { action: 'delete', id: record.id, label: 'Delete submission', icon: 'fa-trash', danger: true }
         ])}</td>
@@ -61,14 +69,14 @@
   }
 
   function previewSubmission(record) {
-    NC.components.openModal({ title: 'Submission preview', eyebrow: record.status || 'Pending', size: 'preview', content: submissionPreviewMarkup(record), footer: `<button type="button" class="btn btn-secondary" data-modal-close>Close</button>${hasTransferredMedia(record) || record.status === 'Rejected' ? '' : '<button type="button" class="btn btn-primary" data-submission-preview-approve><i class="fa-regular fa-circle-check" aria-hidden="true"></i>Approve</button>'}`, onOpen: (modalRoot) => { NC.components.bindImageFallbacks(modalRoot); modalRoot.querySelector('[data-submission-preview-approve]')?.addEventListener('click', () => { NC.components.closeModal(); window.setTimeout(() => openApproval(record), 180); }); } });
+    NC.components.openModal({ title: 'Submission preview', eyebrow: record.status || 'Pending', size: 'preview', content: submissionPreviewMarkup(record), footer: `<button type="button" class="btn btn-secondary" data-modal-close>Close</button>${approvalAvailable(record) ? '<button type="button" class="btn btn-primary" data-submission-preview-approve><i class="fa-regular fa-circle-check" aria-hidden="true"></i>Approve</button>' : ''}`, onOpen: (modalRoot) => { NC.components.bindImageFallbacks(modalRoot); modalRoot.querySelector('[data-submission-preview-approve]')?.addEventListener('click', () => { NC.components.closeModal(); window.setTimeout(() => openApproval(record), 180); }); } });
   }
 
   function openView(record) {
     NC.components.openModal({
       title: record.title, eyebrow: 'Submission details', size: 'xl',
       content: `<div class="submission-detail-grid"><section><h3 class="section-mini-title">Submitter</h3><dl class="details-list"><div><dt>Title</dt><dd>${escapeHTML(record.title)}</dd></div><div><dt>Designation</dt><dd>${escapeHTML(record.designation || '—')}</dd></div><div><dt>Address</dt><dd>${escapeHTML(record.address || '—')}</dd></div><div><dt>Phone</dt><dd>${escapeHTML(record.phone || '—')}</dd></div></dl></section><section><h3 class="section-mini-title">Writer</h3><div class="profile-preview compact">${NC.utils.avatarHTML(record.writer_name, record.writer_profile_image, 'profile-preview-avatar')}<div><h3>${escapeHTML(record.writer_name)}</h3><p>${escapeHTML(record.writer_designation || 'Contributor')}</p></div></div><dl class="details-list mt-4"><div><dt>Email</dt><dd>${escapeHTML(record.writer_email || '—')}</dd></div><div><dt>Facebook</dt><dd>${safeExternalUrl(record.writer_facebook) ? `<a href="${escapeHTML(record.writer_facebook)}" target="_blank" rel="noopener noreferrer">Open profile <i class="fa-regular fa-arrow-up-right-from-square" aria-hidden="true"></i></a>` : '—'}</dd></div></dl></section></div><section class="mt-6"><div class="flex flex-wrap items-center justify-between gap-3"><h3 class="section-mini-title">Article</h3>${NC.components.statusBadge(record.status)}</div><h4 class="text-xl font-semibold mt-4">${escapeHTML(record.content_title || record.title)}</h4><div class="prose-content mt-4">${NC.utils.sanitizeHTML(record.content)}</div></section>`,
-      footer: `<button type="button" class="btn btn-secondary" data-modal-close>Close</button><button type="button" class="btn btn-secondary" data-submission-edit><i class="fa-regular fa-pen" aria-hidden="true"></i>Edit</button>${hasTransferredMedia(record) || record.status === 'Rejected' ? '' : '<button type="button" class="btn btn-primary" data-submission-approve><i class="fa-regular fa-circle-check" aria-hidden="true"></i>Approve & convert</button>'}`,
+      footer: `<button type="button" class="btn btn-secondary" data-modal-close>Close</button><button type="button" class="btn btn-secondary" data-submission-edit><i class="fa-regular fa-pen" aria-hidden="true"></i>Edit</button>${approvalAvailable(record) ? '<button type="button" class="btn btn-primary" data-submission-approve><i class="fa-regular fa-circle-check" aria-hidden="true"></i>Approve & convert</button>' : ''}`,
       onOpen: (modalRoot) => {
         NC.components.bindImageFallbacks(modalRoot);
         modalRoot.querySelector('[data-submission-edit]').addEventListener('click', () => { NC.components.closeModal(); window.setTimeout(() => openForm(record), 180); });
@@ -198,6 +206,10 @@
   }
 
   function openApproval(record) {
+    if (!canConvertSubmission()) {
+      NC.components.toast('Approval conversion requires Submit Blogs, Blogs, and Authors access.', 'warning');
+      return;
+    }
     if (hasTransferredMedia(record) || record.status === 'Rejected') {
       NC.components.toast('This submission is not eligible for another conversion.', 'warning');
       return;
@@ -306,7 +318,7 @@
   function render(container, context = {}) {
     root = container;
     const initialStatus = context.params?.get('filter') || 'all'; state.setFilter('status', initialStatus);
-    root.innerHTML = `${NC.components.pageHeader({ eyebrow: 'Moderation', title: 'Submit Blogs', description: 'Review public contributions and convert approved work into structured blogs.', breadcrumb: [{ label: 'Submit Blogs' }], actions: `${NC.importer.bulkButton('submissions')}<button type="button" class="btn btn-primary" data-add-submission><i class="fa-regular fa-plus" aria-hidden="true"></i>Add submission</button>` })}<section class="submission-summary"><article><span class="metric-icon metric-amber"><i class="fa-regular fa-clock" aria-hidden="true"></i></span><div><small>Pending review</small><strong data-pending-submissions>—</strong></div></article><article class="submission-help"><i class="fa-regular fa-lightbulb" aria-hidden="true"></i><p>Approving a submission reuses a matching author and preserves the original article content.</p></article></section><section class="surface mt-5"><div class="list-toolbar"><label class="search-field"><i class="fa-regular fa-magnifying-glass" aria-hidden="true"></i><span class="sr-only">Search submissions</span><input type="search" placeholder="Search title or writer…" data-submission-search></label><select class="form-select toolbar-select" data-submission-status aria-label="Filter submissions"><option value="all">All statuses</option>${['Pending', 'Reviewed', 'Approved', 'Rejected'].map((status) => `<option value="${status}">${status}</option>`).join('')}</select></div><div data-submissions-content>${NC.components.skeleton(7, 5)}</div></section>`;
+    root.innerHTML = `${NC.components.pageHeader({ eyebrow: 'Moderation', title: 'Submit Blogs', description: 'Review public contributions and convert approved work into structured blogs.', breadcrumb: [{ label: 'Submit Blogs' }], actions: `${NC.importer.bulkButton('submissions')}<button type="button" class="btn btn-primary" data-add-submission><i class="fa-regular fa-plus" aria-hidden="true"></i>Add submission</button>` })}<section class="submission-summary"><article><span class="metric-icon metric-amber"><i class="fa-regular fa-clock" aria-hidden="true"></i></span><div><small>Pending review</small><strong data-pending-submissions>—</strong></div></article><article class="submission-help"><i class="fa-regular fa-lightbulb" aria-hidden="true"></i><p>${canConvertSubmission() ? 'Approving a submission reuses a matching author and preserves the original article content.' : 'You can review and reject submissions. Approval conversion also requires the Blogs and Authors menus.'}</p></article></section><section class="surface mt-5"><div class="list-toolbar"><label class="search-field"><i class="fa-regular fa-magnifying-glass" aria-hidden="true"></i><span class="sr-only">Search submissions</span><input type="search" placeholder="Search title or writer…" data-submission-search></label><select class="form-select toolbar-select" data-submission-status aria-label="Filter submissions"><option value="all">All statuses</option>${['Pending', 'Reviewed', 'Approved', 'Rejected'].map((status) => `<option value="${status}">${status}</option>`).join('')}</select></div><div data-submissions-content>${NC.components.skeleton(7, 5)}</div></section>`;
     root.querySelector('[data-add-submission]').addEventListener('click', () => openForm());
     root.querySelector('[data-submission-search]').addEventListener('input', debounce((event) => { state.setQuery(event.target.value); renderList(); }, 220));
     const status = root.querySelector('[data-submission-status]'); status.value = ['Pending', 'Reviewed', 'Approved', 'Rejected'].includes(initialStatus) ? initialStatus : 'all';

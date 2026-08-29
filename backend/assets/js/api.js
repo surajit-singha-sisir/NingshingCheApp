@@ -18,15 +18,20 @@
         this.code === 'PGRST205' || /schema cache|could not find the table/i.test(`${message} ${this.details}`)
       );
       this.isSchemaMismatch = ['PGRST204', '42703'].includes(this.code) || /could not find.+column|column.+(?:schema cache|does not exist)/i.test(`${message} ${this.details}`);
+      this.isRpcMissing = this.code === 'PGRST202' || (
+        this.status === 404 && /function.+schema cache|could not find the function/i.test(`${message} ${this.details}`)
+      );
     }
   }
 
   function authHeaders() {
     const accessToken = NC.auth?.getAccessToken?.();
     const dashboardToken = NC.auth?.getDashboardToken?.();
+    const dashboardSession = NC.auth?.getSessionToken?.();
     return {
       apikey: supabase.publishableKey,
       Authorization: `Bearer ${accessToken || supabase.publishableKey}`,
+      ...(dashboardSession ? { 'x-dashboard-session': dashboardSession } : {}),
       ...(dashboardToken ? { 'x-dashboard-token': dashboardToken } : {})
     };
   }
@@ -223,7 +228,8 @@
       ['submissions', 'Submit Blogs', 'file-pen', ['title', 'writer_name', 'content_title']],
       ['videos', 'Videos', 'video', ['title', 'description']]
     ];
-    const settled = await Promise.allSettled(definitions.map(async ([table, label, icon, fields]) => {
+    const accessible = definitions.filter(([table]) => NC.auth?.canAccess?.(table));
+    const settled = await Promise.allSettled(accessible.map(async ([table, label, icon, fields]) => {
       const or = fields.map((field) => `${field}.ilike.*${term}*`).join(',');
       const result = await list(table, { select: '*', or, order: 'created_at.desc', limit: 5 });
       return result.data.map((item) => ({ table, label, icon, item }));
@@ -245,9 +251,13 @@
         return { key, table: tables[key], ok: false, error };
       }
     }));
+    const accessControlMissing = Boolean(NC.auth?.isLegacy?.());
+    results.push(accessControlMissing
+      ? { key: 'access-control', table: 'dashboard_access_control', ok: false, error: { isAccessControlMissing: true, message: 'Migration 004 is not installed.' } }
+      : { key: 'access-control', table: 'dashboard_access_control', ok: true });
     const missing = results.filter((item) => item.error?.isSchemaMissing);
     const mismatched = results.filter((item) => item.error?.isSchemaMismatch);
-    return { ok: results.every((item) => item.ok), results, missing, mismatched };
+    return { ok: results.every((item) => item.ok), results, missing, mismatched, accessControlMissing };
   }
 
   function storageObjectUrl(bucket, path) {

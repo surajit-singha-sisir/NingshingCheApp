@@ -32,16 +32,30 @@
 
   function renderNavigation() {
     const nav = qs('#sidebar-navigation');
+    const visibleRoutes = NC_CONFIG.routes.filter((item) => NC.auth.canAccess(item.id));
     const groups = [
-      { id: 'overview', label: '', items: NC_CONFIG.routes.filter((item) => item.group === 'overview') },
-      { id: 'content', label: 'Content', items: NC_CONFIG.routes.filter((item) => item.group === 'content') },
-      { id: 'system', label: 'System', items: NC_CONFIG.routes.filter((item) => item.group === 'system') }
-    ];
+      { id: 'overview', label: '', items: visibleRoutes.filter((item) => item.group === 'overview') },
+      { id: 'content', label: 'Content', items: visibleRoutes.filter((item) => item.group === 'content') },
+      { id: 'system', label: 'System', items: visibleRoutes.filter((item) => item.group === 'system') }
+    ].filter((group) => group.items.length);
     nav.innerHTML = groups.map((group) => `
       <div class="nav-group">
         ${group.label ? `<p class="nav-group-label">${escapeHTML(group.label)}</p>` : ''}
         ${group.items.map((item) => `<a class="nav-link" href="#/${escapeHTML(item.id)}" data-nav-route="${escapeHTML(item.id)}"><i class="fa-regular ${escapeHTML(item.icon)}" aria-hidden="true"></i><span>${escapeHTML(item.label)}</span>${item.id === 'submissions' ? '<span class="nav-count hidden" data-submission-nav-count></span>' : ''}</a>`).join('')}
       </div>`).join('');
+  }
+
+  function firstAccessibleRoute() {
+    const preferred = NC.utils.readPreference('landing-page', NC_CONFIG.app.defaultRoute);
+    if (preferred && NC.auth.canAccess(preferred)) return preferred;
+    return NC_CONFIG.routes.find((item) => NC.auth.canAccess(item.id))?.id || 'dashboard';
+  }
+
+  function syncPermissionControls() {
+    qsa('[data-user-settings-link]').forEach((link) => { link.hidden = !NC.auth.canAccess('settings'); });
+    const searchButton = qs('[data-search-open]');
+    const searchableRoutes = ['authors', 'blogs', 'categories', 'comments', 'galleries', 'books', 'submissions', 'videos'];
+    if (searchButton) searchButton.hidden = !searchableRoutes.some((route) => NC.auth.canAccess(route));
   }
 
   function setActiveNavigation(route) {
@@ -60,10 +74,16 @@
     document.body.classList.add('login-mode');
     qs('#toast-container')?.replaceChildren();
     currentView?.destroy?.(); currentView = null;
+    const message = qs('#login-message');
     if (reason === 'expired') {
-      const message = qs('#login-message');
       message.textContent = 'Your session expired. Sign in again to continue.';
       message.classList.remove('hidden');
+    } else if (reason === 'security-upgrade') {
+      message.textContent = 'Secure login is now active. Sign in again to replace the old compatibility session.';
+      message.classList.remove('hidden');
+    } else {
+      message.textContent = '';
+      message.classList.add('hidden');
     }
     window.setTimeout(() => qs('#login-username')?.focus(), 80);
   }
@@ -76,6 +96,16 @@
     qsa('[data-current-user-name]').forEach((node) => { node.textContent = session?.user?.name || NC_CONFIG.auth.displayName; });
     qsa('[data-current-user-role]').forEach((node) => { node.textContent = session?.user?.role || NC_CONFIG.auth.role; });
     qsa('[data-current-user-initials]').forEach((node) => { node.textContent = NC.utils.initials(session?.user?.name || NC_CONFIG.auth.displayName); });
+    renderNavigation();
+    syncPermissionControls();
+  }
+
+  function enforceRequiredPasswordChange() {
+    if (!NC.state.session?.user?.mustChangePassword || NC.auth.isLegacy()) return;
+    window.setTimeout(() => {
+      const modalRoot = qs('#modal-root');
+      if (modalRoot?.dataset.modalId !== 'own-credentials') NC.accessControl?.openOwnCredentials?.();
+    }, 80);
   }
 
   function closeSidebar() {
@@ -93,7 +123,14 @@
   }
 
   function renderNotFound(container, route) {
-    container.innerHTML = `${NC.components.pageHeader({ eyebrow: '404', title: 'View not found', description: `“${route}” is not a dashboard section.` })}<section class="surface">${NC.components.emptyState({ icon: 'fa-compass-slash', title: 'This route does not exist', description: 'Use the sidebar to return to a valid dashboard section.', action: '<a class="btn btn-primary" href="#/dashboard"><i class="fa-regular fa-gauge-high" aria-hidden="true"></i>Go to dashboard</a>' })}</section>`;
+    const home = firstAccessibleRoute();
+    container.innerHTML = `${NC.components.pageHeader({ eyebrow: '404', title: 'View not found', description: `“${route}” is not a dashboard section.` })}<section class="surface">${NC.components.emptyState({ icon: 'fa-compass-slash', title: 'This route does not exist', description: 'Use the sidebar to return to a valid dashboard section.', action: `<a class="btn btn-primary" href="#/${escapeHTML(home)}"><i class="fa-regular fa-arrow-left" aria-hidden="true"></i>Back to my dashboard</a>` })}</section>`;
+  }
+
+  function renderForbidden(container, route) {
+    const target = NC_CONFIG.routes.find((item) => item.id === route);
+    const home = firstAccessibleRoute();
+    container.innerHTML = `${NC.components.pageHeader({ eyebrow: '403', title: 'Access denied', description: `Your role does not include ${target?.label || 'this menu'}.` })}<section class="surface">${NC.components.emptyState({ icon: 'fa-shield-lock', title: 'This menu is restricted', description: 'Ask a Super Admin to update your role if you need access. Direct links cannot bypass this restriction.', action: `<a class="btn btn-primary" href="#/${escapeHTML(home)}"><i class="fa-regular fa-arrow-left" aria-hidden="true"></i>Go to an allowed menu</a>` })}</section>`;
   }
 
   async function navigate() {
@@ -101,8 +138,9 @@
     const navigationId = ++navigationCounter;
     NC.state.navigationId = navigationId;
     showApp(); closeSidebar(); NC.components.closeModal('route-change'); closeGlobalSearch();
+    enforceRequiredPasswordChange();
     const { route, params } = getHashRoute();
-    const resolvedRoute = NC_CONFIG.routes.some((item) => item.id === route) ? route : route;
+    const resolvedRoute = route;
     setActiveNavigation(resolvedRoute);
     currentView?.destroy?.();
     const view = NC.views[resolvedRoute];
@@ -111,6 +149,7 @@
     content.scrollTop = 0;
     try {
       if (!view) renderNotFound(content, resolvedRoute);
+      else if (!NC.auth.canAccess(resolvedRoute)) renderForbidden(content, resolvedRoute);
       else {
         currentView = view;
         await view.render(content, { route: resolvedRoute, params, navigationId });
@@ -121,7 +160,10 @@
       content.innerHTML = NC.components.errorState(error, { retry: false });
       NC.components.toast(NC.api.userMessage(error, 'This dashboard section could not be opened.'), 'error');
     } finally {
-      if (navigationId === NC.state.navigationId) content.removeAttribute('aria-busy');
+      if (navigationId === NC.state.navigationId) {
+        content.removeAttribute('aria-busy');
+        enforceRequiredPasswordChange();
+      }
     }
   }
 
@@ -138,7 +180,7 @@
     try {
       await NC.auth.login(username, password, remember);
       form.reset();
-      const landing = NC.utils.readPreference('landing-page', NC_CONFIG.app.defaultRoute);
+      const landing = firstAccessibleRoute();
       if (!window.location.hash || window.location.hash.includes('login')) routeTo(landing);
       else await navigate();
       NC.components.toast('Welcome back. Your editorial workspace is ready.', 'success');
@@ -158,23 +200,25 @@
   }
 
   async function checkSchemaOnce() {
-    if (!NC.auth.isAuthenticated() || NC.state.schemaChecked) return;
+    if (!NC.auth.isAuthenticated() || !NC.auth.isSuperAdmin() || NC.state.schemaChecked) return;
     NC.state.schemaChecked = true;
     try {
       const result = await NC.api.schemaProbe();
       const banner = qs('#schema-banner');
-      if (!result.ok && (result.missing.length || result.mismatched.length)) {
+      if (!result.ok && (result.missing.length || result.mismatched.length || result.accessControlMissing)) {
         banner.classList.remove('hidden');
-        banner.querySelector('strong').textContent = result.missing.length ? 'Database setup required' : 'Database update required';
+        banner.querySelector('strong').textContent = result.missing.length ? 'Database setup required' : (result.mismatched.length ? 'Database update required' : 'Security migration required');
         banner.querySelector('[data-schema-message]').textContent = result.missing.length
           ? `${result.missing.length} required database table${result.missing.length === 1 ? ' is' : 's are'} missing. Run the included Supabase schema before using CRUD features.`
-          : 'Required Blog media columns are missing. Run supabase/migrations/003_blog_media_uploads.sql before saving Blog uploads.';
+          : (result.mismatched.length
+            ? 'Required Blog media columns are missing. Run migration 003 before saving Blog uploads.'
+            : 'Run supabase/migrations/004_dashboard_access_control.sql to enable secure users, roles, and sessions.');
       } else banner.classList.add('hidden');
     } catch (error) { console.warn('Schema probe failed:', error); }
   }
 
   async function updateSubmissionCount() {
-    if (!NC.auth.isAuthenticated()) return;
+    if (!NC.auth.isAuthenticated() || !NC.auth.canAccess('submissions')) return;
     try {
       const count = await NC.api.count('submissions', { status: 'Pending' });
       qsa('[data-submission-nav-count]').forEach((node) => { node.textContent = count > 99 ? '99+' : String(count); node.classList.toggle('hidden', !count); });
@@ -182,7 +226,8 @@
   }
 
   function openGlobalSearch() {
-    if (!NC.auth.isAuthenticated()) return;
+    const searchableRoutes = ['authors', 'blogs', 'categories', 'comments', 'galleries', 'books', 'submissions', 'videos'];
+    if (!NC.auth.isAuthenticated() || !searchableRoutes.some((route) => NC.auth.canAccess(route))) return;
     const root = qs('#global-search');
     root.classList.remove('hidden');
     requestAnimationFrame(() => { root.classList.add('is-open'); qs('#global-search-input').focus(); });
@@ -261,6 +306,10 @@
       event.currentTarget.setAttribute('aria-label', visible ? 'Show password' : 'Hide password');
     });
     qsa('[data-logout]').forEach((button) => button.addEventListener('click', handleLogout));
+    qsa('[data-account-settings]').forEach((button) => button.addEventListener('click', () => {
+      qs('#user-menu')?.classList.remove('is-open');
+      NC.accessControl?.openOwnCredentials?.();
+    }));
     qs('[data-theme-toggle]').addEventListener('click', toggleTheme);
     qsa('[data-sidebar-toggle]').forEach((button) => button.addEventListener('click', toggleSidebar));
     qs('#sidebar-overlay').addEventListener('click', closeSidebar);
@@ -286,23 +335,29 @@
       if (!event.detail.authenticated) {
         showLogin(event.detail.reason);
         if (event.detail.reason === 'expired') NC.components.toast('Your session expired. Please sign in again.', 'warning');
+      } else {
+        showApp();
       }
+    });
+    window.addEventListener('nc:session-change', () => {
+      if (NC.auth.isAuthenticated()) showApp();
     });
     window.addEventListener('unhandledrejection', (event) => console.error('Unhandled promise rejection:', event.reason));
   }
 
-  function init() {
+  async function init() {
     renderNavigation(); bindGlobalEvents();
     setTheme(NC.utils.readPreference('theme', NC_CONFIG.app.defaultTheme), false);
     setDensity(NC.utils.readPreference('table-density', 'comfortable'), false);
     updateNetworkStatus();
-    NC.auth.restore();
-    if (NC.auth.isAuthenticated()) {
-      showApp();
-      if (!window.location.hash) routeTo(NC.utils.readPreference('landing-page', NC_CONFIG.app.defaultRoute));
-      else navigate();
-      checkSchemaOnce(); updateSubmissionCount();
-    } else showLogin();
+    const restored = NC.auth.restore();
+    if (!restored) { showLogin(); return; }
+    const valid = await NC.auth.validateSession();
+    if (!valid || !NC.auth.isAuthenticated()) { showLogin(NC.state.authReason || 'expired'); return; }
+    showApp();
+    if (!window.location.hash) routeTo(firstAccessibleRoute());
+    else await navigate();
+    checkSchemaOnce(); updateSubmissionCount();
   }
 
   NC.app = Object.freeze({ init, navigate, setTheme, setDensity, openGlobalSearch });

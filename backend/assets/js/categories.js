@@ -6,8 +6,12 @@
   let root;
   let blogs = [];
 
+  function canViewBlogs() {
+    return NC.auth.canAccess('blogs');
+  }
+
   function usageCount(categoryId) {
-    return blogs.filter((blog) => blog.category_id === categoryId).length;
+    return canViewBlogs() ? blogs.filter((blog) => blog.category_id === categoryId).length : 0;
   }
 
   function renderList() {
@@ -28,7 +32,7 @@
         <tr>
           <td data-label="Category"><div class="category-cell"><span><i class="fa-regular fa-${escapeHTML(record.icon_name || 'layer-group')}" aria-hidden="true"></i></span><div><strong>${escapeHTML(record.title)}</strong><small>/${escapeHTML(record.slug)}</small></div></div></td>
           <td data-label="Subtitle"><span class="line-clamp-2">${escapeHTML(record.sub_title || '—')}</span></td>
-          <td data-label="Blogs"><button type="button" class="usage-count" data-filter-blogs="${escapeHTML(record.id)}">${count.toLocaleString()} blog${count === 1 ? '' : 's'}</button></td>
+          <td data-label="Blogs">${canViewBlogs() ? `<button type="button" class="usage-count" data-filter-blogs="${escapeHTML(record.id)}">${count.toLocaleString()} blog${count === 1 ? '' : 's'}</button>` : '<span class="text-xs text-muted-foreground"><i class="fa-regular fa-lock" aria-hidden="true"></i> Blogs restricted</span>'}</td>
           <td data-label="Created">${escapeHTML(formatDate(record.created_at))}</td>
           <td data-label="Actions" class="text-right">${NC.components.rowActions([
             { action: 'edit', id: record.id, label: 'Edit category', icon: 'fa-pen' },
@@ -142,7 +146,7 @@
     try {
       const [categoriesResult, blogsResult] = await Promise.all([
         NC.api.list('categories', { select: '*', order: 'title.asc', limit: 1000 }),
-        NC.api.list('blogs', { select: 'id,category_id', limit: 5000 })
+        canViewBlogs() ? NC.api.list('blogs', { select: 'id,category_id', limit: 5000 }) : Promise.resolve({ data: [] })
       ]);
       if (NC.crud.isStaleNavigation(context)) return;
       blogs = blogsResult.data; state.setRecords(categoriesResult.data); renderList();
@@ -159,7 +163,7 @@
     root = container;
     root.innerHTML = `
       ${NC.components.pageHeader({ eyebrow: 'Taxonomy', title: 'Categories', description: 'Organize articles into clear, reader-friendly sections.', breadcrumb: [{ label: 'Categories' }], actions: `${NC.importer.bulkButton('categories')}<button type="button" class="btn btn-primary" data-add-category><i class="fa-regular fa-layer-plus" aria-hidden="true"></i>Add category</button>` })}
-      <section class="surface"><div class="list-toolbar"><label class="search-field"><i class="fa-regular fa-magnifying-glass" aria-hidden="true"></i><span class="sr-only">Search categories</span><input type="search" placeholder="Search categories…" data-category-search></label><span class="toolbar-note"><i class="fa-regular fa-circle-info" aria-hidden="true"></i>Usage is calculated from live blog relationships</span></div><div data-categories-content>${NC.components.skeleton(6, 5)}</div></section>`;
+      <section class="surface"><div class="list-toolbar"><label class="search-field"><i class="fa-regular fa-magnifying-glass" aria-hidden="true"></i><span class="sr-only">Search categories</span><input type="search" placeholder="Search categories…" data-category-search></label><span class="toolbar-note"><i class="fa-regular ${canViewBlogs() ? 'fa-circle-info' : 'fa-lock'}" aria-hidden="true"></i>${canViewBlogs() ? 'Usage is calculated from live blog relationships' : 'Blog usage requires Blogs menu access'}</span></div><div data-categories-content>${NC.components.skeleton(6, 5)}</div></section>`;
     root.querySelector('[data-add-category]').addEventListener('click', () => openForm());
     root.querySelector('[data-category-search]').addEventListener('input', debounce((event) => { state.setQuery(event.target.value); renderList(); }, 220));
     NC.importer.bindBulk(root, { type: 'categories', onComplete: () => load(context) });

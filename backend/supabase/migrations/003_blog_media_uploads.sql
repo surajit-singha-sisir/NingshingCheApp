@@ -56,9 +56,15 @@ declare
   selected_author public.authors;
   created_blog public.blogs;
   final_slug text;
+  authorized boolean;
 begin
-  if not public.is_dashboard_request() then
-    raise exception 'Dashboard authorization required' using errcode = '42501';
+  if to_regprocedure('public.dashboard_has_permission(text)') is not null then
+    execute 'select public.dashboard_has_permission($1)' into authorized using 'submissions';
+  else
+    authorized := public.is_dashboard_request();
+  end if;
+  if not coalesce(authorized, false) then
+    raise exception 'Submit Blogs authorization required' using errcode = '42501';
   end if;
 
   select * into submission

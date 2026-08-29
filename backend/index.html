@@ -83,8 +83,8 @@
           <p id="login-error" class="login-error hidden" role="alert"></p>
           <button type="submit" class="btn btn-primary btn-lg w-full justify-center" data-login-submit><span>Open dashboard</span><i class="fa-regular fa-arrow-right" aria-hidden="true"></i></button>
         </form>
-        <div class="demo-credentials"><i class="fa-regular fa-circle-info" aria-hidden="true"></i><div><strong>Initial demo access</strong><p>Username <code>admin</code> · Password <code>admin123</code></p></div></div>
-        <p class="login-security-note"><i class="fa-regular fa-shield-exclamation" aria-hidden="true"></i>This client-side login is for initial setup. Use Supabase Auth before production deployment.</p>
+        <div class="demo-credentials"><i class="fa-regular fa-circle-info" aria-hidden="true"></i><div><strong>Initial Super Admin access</strong><p>Username <code>admin</code> · Password <code>admin123</code></p></div></div>
+        <p class="login-security-note"><i class="fa-regular fa-shield-check" aria-hidden="true"></i>Migration 004 provides server-validated sessions, role permissions, and secure password changes.</p>
       </div>
     </main>
   </div>
@@ -116,10 +116,11 @@
           <span class="network-indicator" data-network-indicator title="Connected"><i></i><span class="sr-only">Connection status</span></span>
           <button type="button" class="icon-button" data-theme-toggle aria-label="Switch theme"><i class="fa-regular fa-sun-bright" aria-hidden="true"></i></button>
           <div class="user-menu-wrap">
-            <button type="button" class="user-menu-button" data-user-menu-toggle aria-haspopup="menu" aria-expanded="false"><span class="user-avatar" data-current-user-initials>CE</span><span class="user-copy"><strong data-current-user-name>Chief Editor</strong><small data-current-user-role>Administrator</small></span><i class="fa-regular fa-chevron-down" aria-hidden="true"></i></button>
+            <button type="button" class="user-menu-button" data-user-menu-toggle aria-haspopup="menu" aria-expanded="false"><span class="user-avatar" data-current-user-initials>CE</span><span class="user-copy"><strong data-current-user-name>Chief Editor</strong><small data-current-user-role>Super Admin</small></span><i class="fa-regular fa-chevron-down" aria-hidden="true"></i></button>
             <div id="user-menu" class="user-menu" role="menu">
-              <div class="user-menu-header"><span class="user-avatar" data-current-user-initials>CE</span><span><strong data-current-user-name>Chief Editor</strong><small data-current-user-role>Administrator</small></span></div>
-              <a href="#/settings" role="menuitem"><i class="fa-regular fa-gear" aria-hidden="true"></i>Settings</a>
+              <div class="user-menu-header"><span class="user-avatar" data-current-user-initials>CE</span><span><strong data-current-user-name>Chief Editor</strong><small data-current-user-role>Super Admin</small></span></div>
+              <button type="button" role="menuitem" data-account-settings><i class="fa-regular fa-key" aria-hidden="true"></i>My login</button>
+              <a href="#/settings" role="menuitem" data-user-settings-link><i class="fa-regular fa-gear" aria-hidden="true"></i>Settings</a>
               <a href="https://ningshingche.com" target="_blank" rel="noopener noreferrer" role="menuitem"><i class="fa-regular fa-globe" aria-hidden="true"></i>Public website</a>
               <div class="menu-separator"></div>
               <button type="button" role="menuitem" data-logout><i class="fa-regular fa-arrow-right-from-bracket" aria-hidden="true"></i>Logout</button>
@@ -174,6 +175,7 @@
   <script defer src="assets/js/submissions.js"></script>
   <script defer src="assets/js/videos.js"></script>
   <script defer src="assets/js/settings.js"></script>
+  <script defer src="assets/js/access-control.js"></script>
   <script defer src="assets/js/app.js"></script>
 </body>
 </html>
