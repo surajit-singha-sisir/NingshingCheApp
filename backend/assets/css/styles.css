@@ -515,6 +515,7 @@ kbd { display: inline-flex; min-height: 23px; align-items: center; gap: 3px; bor
 .ql-toolbar.ql-snow { border: 0 !important; border-bottom: 1px solid var(--border) !important; padding: 9px !important; background: var(--surface-subtle); }
 .ql-container.ql-snow { min-height: 370px; border: 0 !important; color: var(--foreground); font-family: Georgia, Cambria, serif; font-size: 1rem; }
 .ql-editor { min-height: 370px; padding: 24px !important; line-height: 1.8 !important; }
+#author-description .ql-container.ql-snow, #author-description .ql-editor, #author-description .editor-fallback { min-height: 220px; }
 .ql-editor.ql-blank::before { left: 24px !important; color: var(--faint) !important; font-style: normal !important; }
 .ql-snow .ql-stroke { stroke: var(--muted-foreground) !important; }
 .ql-snow .ql-fill { fill: var(--muted-foreground) !important; }

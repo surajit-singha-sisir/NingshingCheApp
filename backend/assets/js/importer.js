@@ -130,7 +130,7 @@
         const image = urlValue(row.image, 'Profile image URL', issues, strict);
         return prepareResult({
           title: text(row.title), designation: text(row.designation), location: text(row.location),
-          description: text(row.description), is_verified: boolValue(row.is_verified), ...imagePayload(image)
+          description: richTextValue(row.description), is_verified: boolValue(row.is_verified), ...imagePayload(image)
         }, issues);
       },
       duplicate(payload) { return normalized(payload.title); },

@@ -308,7 +308,7 @@
               [{ list: 'ordered' }, { list: 'bullet' }],
               ['blockquote', 'link'],
               [{ align: [] }],
-              ['image', 'clean']
+              options.allowImages === false ? ['clean'] : ['image', 'clean']
             ],
             handlers: {
               link: async function linkHandler(value) {

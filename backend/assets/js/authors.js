@@ -78,13 +78,13 @@
       <div class="live-profile-card">
         ${avatarHTML(data.title || 'Author', media?.url, 'live-profile-avatar')}
         <div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><h3>${escapeHTML(data.title || 'Author name')}</h3>${data.is_verified ? NC.components.statusBadge('Verified') : ''}</div><p>${escapeHTML(data.designation || 'Designation')}</p><small><i class="fa-regular fa-location-dot" aria-hidden="true"></i>${escapeHTML(data.location || 'Location')}</small></div>
-        <p class="live-profile-description">${escapeHTML(data.description || 'The author biography preview will appear here.')}</p>
+        <div class="live-profile-description prose-content">${NC.utils.sanitizeHTML(data.description || '<p>The author biography preview will appear here.</p>')}</div>
       </div>`;
   }
 
   function openForm(record = null) {
     const id = record?.id || '';
-    let uploader;
+    let uploader, descriptionEditor;
     const initialMedia = {
       url: record?.image || '', delete_url: record?.imgbb_delete_url || '', image_meta: record?.image_meta || {}
     };
@@ -102,7 +102,7 @@
                 <div class="field"><label class="field-label" for="author-location">Location</label><input class="form-input" id="author-location" name="location" value="${escapeHTML(record?.location || '')}" placeholder="Sylhet, Bangladesh"></div>
               </div>
               ${NC.media.imageUploaderHTML({ id: 'author-image', label: 'Profile image', hint: 'Use a square portrait where possible.' })}
-              <div class="field"><label class="field-label" for="author-description">Description</label><textarea class="form-textarea min-h-32" id="author-description" name="description" placeholder="Short biography…">${escapeHTML(record?.description || '')}</textarea></div>
+              ${NC.editor.editorHTML({ id: 'author-description', label: 'Description', hint: 'Format the author biography with headings, links, quotations, and lists.' })}
               <label class="check-card"><input type="checkbox" name="is_verified" ${record?.is_verified ? 'checked' : ''}><span class="check-control"><i class="fa-solid fa-check" aria-hidden="true"></i></span><span><strong>Verified author</strong><small>Display a verification badge beside this profile.</small></span></label>
             </div>
             <aside class="form-preview-sticky"><p class="eyebrow mb-3">Live preview</p><div data-author-preview>${previewMarkup(record || {}, initialMedia)}</div><button type="button" class="btn btn-secondary btn-sm mt-4 w-full justify-center" data-refresh-author-preview><i class="fa-regular fa-eye" aria-hidden="true"></i>Preview current form</button></aside>
@@ -112,15 +112,23 @@
       onOpen: (modalRoot) => {
         const form = modalRoot.querySelector('#author-form');
         const preview = modalRoot.querySelector('[data-author-preview]');
-        uploader = NC.media.mountImageUploader(modalRoot.querySelector('#author-image'), {
-          initial: initialMedia,
-          onChange: () => updatePreview()
-        });
         const updatePreview = () => {
           const data = formData(form);
-          preview.innerHTML = previewMarkup(data, uploader.getValue());
+          data.description = descriptionEditor?.getValue() || record?.description || '';
+          preview.innerHTML = previewMarkup(data, uploader?.getValue() || initialMedia);
           NC.components.bindImageFallbacks(preview);
         };
+        uploader = NC.media.mountImageUploader(modalRoot.querySelector('#author-image'), {
+          initial: initialMedia,
+          onChange: updatePreview
+        });
+        descriptionEditor = NC.editor.mountEditor(modalRoot.querySelector('#author-description'), {
+          initial: record?.description || '',
+          label: 'Author description',
+          placeholder: 'Write the author biography…',
+          allowImages: false,
+          onChange: debounce(updatePreview, 120)
+        });
         form.addEventListener('input', debounce(updatePreview, 120));
         modalRoot.querySelector('[data-refresh-author-preview]').addEventListener('click', updatePreview);
         if (!record) NC.importer.mountFormControl(modalRoot, {
@@ -128,12 +136,14 @@
           onRecord: ({ payload }) => {
             NC.importer.fillForm(form, payload);
             uploader.setValue(payload.image || '');
+            descriptionEditor.setValue(payload.description || '');
             updatePreview();
           }
         });
         form.addEventListener('submit', async (event) => {
           event.preventDefault();
           const data = formData(form);
+          data.description = descriptionEditor.getValue();
           const errors = { title: data.title ? '' : 'Author name is required.' };
           if (!validateFields(form, errors) || !uploader.validate() || uploader.isUploading()) {
             if (uploader.isUploading()) NC.components.toast('Wait for the image upload to finish.', 'warning');
@@ -158,6 +168,10 @@
           } finally { NC.utils.setButtonLoading(button, false); }
         });
         updatePreview();
+      },
+      onClose: () => {
+        descriptionEditor?.destroy?.();
+        descriptionEditor = null;
       }
     });
     return modal;

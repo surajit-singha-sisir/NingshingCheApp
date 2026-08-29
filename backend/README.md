@@ -10,7 +10,7 @@ The dashboard is located entirely inside `backend/`, as requested.
 - Expiring client-side administrator session and protected dashboard routes
 - Real Supabase CRUD for authors, blogs, categories, comments, galleries, PDF books, public submissions, videos, and site settings
 - Relationship-aware blog editing with categories and authors
-- WYSIWYG article and submission editors with sanitized HTML/source mode
+- WYSIWYG author biography, article, and submission editors with sanitized HTML/source mode
 - Quill image insertion through either a local ImgBB upload or a direct image URL
 - Slug generation and server-backed uniqueness checks
 - Before-save article, gallery, book, submission, and video previews
@@ -328,11 +328,13 @@ Pinned versions are used where the CDN package supports it. If a CDN is blocked,
 
 ## Rich text and XSS safety
 
-Blog and submission HTML is treated as untrusted. The editor abstraction sanitizes content with DOMPurify:
+Author biography, Blog, and submission HTML is treated as untrusted. The shared Quill editor abstraction sanitizes content with DOMPurify:
 
 - before returning editor content
 - before preview rendering
 - before injecting stored content into dashboard previews
+
+The Author Description field uses Quill for headings, emphasis, links, lists, quotations, alignment, tables, and sanitized HTML source. Its image-upload toolbar action is intentionally disabled because the Author schema has no inline-media metadata or deletion fields; the separate profile-image uploader retains its existing managed-media workflow.
 
 External URLs are validated as `http:` or `https:`. Video previews use provider-specific, encoded iframe URLs; arbitrary embed HTML is never accepted.
 
@@ -413,7 +415,8 @@ Completed checks:
 - Blog hero and PDF file-or-URL controls, the nested Quill image chooser, and 375 px responsive layout were exercised in Chromium.
 - Fixture-backed ImgBB and Supabase Storage uploads produced a Blog payload containing hero, inline-image, PDF provider/path/size, and deletion metadata.
 - CSV bulk validation correctly classified ready, within-file duplicate, and invalid rows; an intercepted create request verified the normalized Supabase payload without modifying production.
-- A genuine `.xlsx` workbook populated the first Author Add form row, including text, boolean, and direct image URL values.
+- A genuine `.xlsx` workbook populated the first Author Add form row, including text, boolean, direct image URL, and Quill biography values.
+- The Author Description Quill editor preserved formatted, sanitized HTML in its live preview and intercepted Supabase payload; its 375 px toolbar stayed inside the modal with internal scrolling.
 - CSV and genuine Excel template downloads were generated successfully, and all eight list/Add workflows exposed their correct import controls while Settings exposed none.
 - All eight entity transformers passed valid schema-shaped rows; Blog relation lookup, tag parsing, direct-media metadata, reading time, and HTML sanitization were verified.
 - The import modal was checked at 375 px: it retained 10 px viewport margins, caused no document-level overflow, and confined its wide preview table to an internal horizontal scroller.
