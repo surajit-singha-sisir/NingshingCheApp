@@ -788,6 +788,63 @@ Ordered task list for making every screen functional against the API:
 
 ---
 
+## 17. The rebuilt public reader (current implementation)
+
+The reader UI was rewritten against the live API. It lives in three new packages
+and replaces the old reader navigation in `MainActivity`:
+
+```
+data/portal/     PortalConfig · PortalApi (Retrofit) · PortalDtos (Moshi)
+                 PortalModels · PortalRepository · PortalProvider
+ui/editorial/    EditorialTheme (tokens, type scale, spacing) · EditorialComponents
+ui/reader/       HomeScreen · ArticleScreen · ListScreens (search/category/author)
+                 ReaderViewModels · ReaderNavHost
+```
+
+| Concern | Where | Notes |
+| --- | --- | --- |
+| Transport | `PortalConfig.okHttpClient()` | TLS 1.2+, modern ciphers only, no cleartext (`res/xml/network_security_config.xml`), logging redacted and debug-only |
+| Auth | none | Public reader uses only the publishable anon key. See [§17.1](#171-why-there-is-no-bearer-token) |
+| Paging | `Page<T>` + `Content-Range` | Exact totals drive "load more" and the search result counter |
+| Caching | `PortalRepository` | TTL in-memory cache for categories/authors/PDFs/videos/settings; last-good-wins on failure |
+| Errors | `PortalError` | Bengali messages; `SchemaMissing` maps `PGRST205`/`PGRST204` to "run the migrations" |
+| Deep links | `ReaderNavHost` | `ningshingche.com/article/{slug}` and `ningshingche.com/{id}`; Bengali slugs are percent-encoded |
+
+### 17.1 Why there is no bearer token
+
+`apikey` + `Authorization: Bearer <publishable key>` is *required* by PostgREST for
+every request, including anonymous ones — but it is **not** a secret and **not** a
+credential. It selects the `anon` Postgres role, whose powers are entirely defined
+by the RLS policies in `schema.sql`: read published blogs, read reference tables,
+insert comments as `Unpublish`. Adding a bearer token or a login to a public reader
+would add attack surface without adding protection.
+
+What was hardened instead:
+
+1. **TLS-only transport** — `network_security_config.xml` sets
+   `cleartextTrafficPermitted="false"` globally and again for the Supabase,
+   ningshingche.com and ImgBB hosts, so no code path can accidentally use HTTP.
+2. **Modern TLS only** — `ConnectionSpec.MODERN_TLS` restricted to TLS 1.2/1.3.
+3. **Keys injected at build time** — `BuildConfig.SUPABASE_PUBLISHABLE_KEY` from
+   `.env` via the secrets plugin; staging and production can differ.
+4. **Header redaction** in the debug logging interceptor.
+5. **No `service_role` key, ever.** The dashboard-session header
+   (`x-dashboard-session`) stays out of the reader entirely — it belongs to the CMS.
+
+Certificate pinning was deliberately **not** added: Supabase serves projects from
+behind a managed edge whose leaf certificates rotate, so a pin would brick every
+installed app at the next rotation.
+
+### 17.2 Screens still to build
+
+Gallery viewer, PDF archive + viewer, bookmarks, reading history, settings, and the
+Room-backed offline cache are the next increment. The components in
+`ui/editorial/EditorialComponents.kt` and the paging contract in
+`ui/reader/ReaderViewModels.kt` are already shared, so those screens are mostly
+layout.
+
+---
+
 *Generated from `app/` on branch `main`. Server contract: [`backend/API.md`](./backend/API.md).
 Database schema: `backend/supabase/schema.sql` and
 `backend/supabase/migrations/004_dashboard_access_control.sql`.*

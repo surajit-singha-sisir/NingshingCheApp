@@ -4,6 +4,8 @@ import android.app.Application
 import com.example.data.ai.NinghsingCheAiAssistant
 import com.example.data.local.AppDatabase
 import com.example.data.preferences.UserPreferencesRepository
+import com.example.data.portal.PortalProvider
+import com.example.data.portal.PortalRepository
 import com.example.data.remote.NingshingCheWebsiteClient
 import com.example.data.remote.SupabaseClient
 import com.example.data.repository.ArticleRepository
@@ -32,6 +34,10 @@ class NinghsingCheApp : Application() {
     lateinit var dashboardRepository: DashboardRepository
         private set
 
+    /** Live, read-only Supabase client used by the public reader UI. */
+    lateinit var portalRepository: PortalRepository
+        private set
+
     override fun onCreate() {
         super.onCreate()
         instance = this
@@ -42,6 +48,7 @@ class NinghsingCheApp : Application() {
         articleRepository = ArticleRepository(database, supabaseClient, websiteClient)
         preferencesRepository = UserPreferencesRepository(this)
         aiAssistant = NinghsingCheAiAssistant(articleRepository)
+        portalRepository = PortalProvider.repository()
     }
 
     companion object {
