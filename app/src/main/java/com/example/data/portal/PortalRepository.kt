@@ -347,7 +347,7 @@ class PortalRepository(
         }
     }
 
-    /** `0-19/50` → 50, `0-19/*` → null, malformed → null. */
+    /** Example header "0-19/50" yields 50; "0-19/star" or malformed yields null. */
     internal fun parseContentRangeTotal(header: String?): Int? {
         if (header.isNullOrBlank()) return null
         val total = header.substringAfterLast('/', "").trim()
@@ -382,12 +382,6 @@ class PortalRepository(
                 if (stale != null) return@recoverCatching stale
                 throw error.toPortalError()
             }
-    }
-
-    private fun Throwable.toPortalError(): Throwable = when (this) {
-        is PortalError -> this
-        is IOException -> PortalError.Offline(this)
-        else -> PortalError.Unknown(this)
     }
 
     private inline fun <T, R> Page<T>.mapItems(transform: (T) -> R): Page<R> = Page(

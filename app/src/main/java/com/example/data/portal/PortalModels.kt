@@ -1,5 +1,7 @@
 package com.example.data.portal
 
+import java.io.IOException
+
 /**
  * UI-facing models for the reader. They are intentionally flat, immutable and
  * free of JSON annotations so a screen never depends on a wire-format detail.
@@ -185,6 +187,12 @@ sealed class PortalError(message: String, cause: Throwable? = null) : Exception(
 
     class Unknown(cause: Throwable? = null) :
         PortalError("তথ্য লোড করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।", cause)
+}
+
+internal fun Throwable.toPortalError(): Throwable = when (this) {
+    is PortalError -> this
+    is IOException -> PortalError.Offline(this)
+    else -> PortalError.Unknown(this)
 }
 
 // ---------------------------------------------------------------------------
