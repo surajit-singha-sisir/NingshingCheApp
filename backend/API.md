@@ -7,7 +7,9 @@ editorial dashboard in `backend/`. Everything here was read from the shipped sou
 - **Dashboard version:** 1.3.0 (`assets/js/config.js`)
 - **Backend:** Supabase (PostgREST + Storage), ImgBB for raster images
 - **Client:** no-build static app; all calls are made from the browser with a publishable key
-- **Companion documents:** [`README.md`](./README.md) (setup, migrations, feature tour)
+- **Companion documents:** [`README.md`](./README.md) (setup, migrations, feature tour) ·
+  [`ANDROID_API.md`](../ANDROID_API.md) (Kotlin/Compose UI foundation and how the Android app
+  consumes these endpoints)
 
 ---
 
@@ -1147,6 +1149,43 @@ curl -s "$SUPABASE_URL/rest/v1/rpc/dashboard_session" "${H[@]}" \
 curl -s "$SUPABASE_URL/rest/v1/rpc/dashboard_logout" "${H[@]}" \
   -H "Content-Type: application/json" -H "Prefer: return=representation" -d '{}'
 ```
+
+---
+
+## 17. Android client (Kotlin / Jetpack Compose)
+
+The Android app in `app/` is a **second consumer of this same API**. Full UI-foundation and
+integration guide: [`ANDROID_API.md`](../ANDROID_API.md). Summary:
+
+| Layer | Class | What it calls |
+| --- | --- | --- |
+| Transport | `data/remote/SupabaseClient` (OkHttp) | `/rest/v1/<table>` CRUD for all nine content tables |
+| Config | `data/remote/SupabaseConfig` | `restBaseUrl`, `authBaseUrl`, `imgbbUploadUrl`; keys from `BuildConfig` → `.env` |
+| Reader cache | `data/local/AppDatabase` (Room) + `ArticleRepository` | `GET /blogs?status=eq.Publish`, then `categories`, `authors`, `pdf_books` |
+| CMS state | `DashboardRepository` | Same endpoints, optimistic writes |
+| Media | `ImgBbUploader` | `POST https://api.imgbb.com/1/upload` |
+
+### Differences that matter when debugging the app
+
+1. **No dashboard session header.** `SupabaseClient` sends only `apikey` and
+   `Authorization`. It never sends `x-dashboard-session`, so every write is rejected with
+   `42501` on any install where migration 004 is active. Reads still work because the public
+   `SELECT` policies allow anonymous access.
+2. **Auth is local, not the RPCs.** `signIn()` accepts `admin@ningshingche.com` / `admin123`
+   in-process and stores credentials in plain `SharedPreferences`; `dashboard_login`,
+   `dashboard_session`, and `dashboard_logout` are never called. `UserRole` in the app is an
+   enum that does not exist in the database — the real roles live in `dashboard_roles`.
+3. **Always `select=*`, never paginated.** `offset` exists as a parameter but is unused; there
+   are no `Content-Range` counts, so statistics are computed from a partial list.
+4. **`approve_submission` is not used.** `DashboardRepository.approveAndPublishSubmission()`
+   performs a non-transactional local conversion and never sets `converted_blog_id`.
+5. **Storage is not used.** PDFs are consumed from the `link` column; the `pdf-books` bucket is
+   never written to from Android.
+6. **Missing columns** in the app's `SupabaseModels.kt`: `image_meta`, `inline_media`,
+   `imgbb_delete_url` (blogs), `pdf_file_provider` / `pdf_storage_path` / `pdf_file_size_mb`,
+   `seo_description`, `reviewed_at`, `converted_blog_id`, `favicon_url`.
+
+Fix order and code recipes: [`ANDROID_API.md` §14–§16](../ANDROID_API.md#14-critical-gaps-and-required-changes).
 
 ---
 
