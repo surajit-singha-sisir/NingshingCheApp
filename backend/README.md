@@ -1,5 +1,8 @@
 # Ningshing Che — Editorial Dashboard
 
+> **API documentation:** see [`API.md`](./API.md) for every REST endpoint, RPC function, Storage
+> operation, table schema, error code, and client helper.
+
 A responsive, no-build administration dashboard for **Ningshing Che — Bishnupriya Manipuri Magazine**. It is built with semantic HTML, Tailwind CSS via CDN, modular Vanilla JavaScript, Chart.js, Quill, DOMPurify, SheetJS, Font Awesome 6 Pro, Supabase REST, ImgBB, and Supabase Storage.
 
 The dashboard is located entirely inside `backend/`, as requested.
@@ -58,6 +61,7 @@ backend/
 │       ├── settings.js
 │       ├── access-control.js  # Super Admin users, roles, and own credentials
 │       └── app.js             # Authorized shell, routing, theme, search
+├── API.md                     # API documentation (REST, RPC, Storage, schema, errors)
 ├── imports/
 │   ├── ningshing-che-authors.csv             # Ready-to-import 27-author dataset
 │   ├── ningshing-che-author-sources.csv      # Complete profile/image provenance audit
