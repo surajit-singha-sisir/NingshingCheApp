@@ -103,15 +103,21 @@ fun MyApplicationTheme(
 
     val view = LocalView.current
     if (!view.isInEditMode) {
-        SideEffect {
-            val window = (view.context as Activity).window
-            val bar = if (darkTheme) PortalDarkBg.toArgb() else PortalMaroon.toArgb()
-            @Suppress("DEPRECATION")
-            window.statusBarColor = bar
-            @Suppress("DEPRECATION")
-            window.navigationBarColor = if (darkTheme) PortalDarkSurface.toArgb() else PortalWhite.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
-            WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = !darkTheme
+        val activity = view.context as? Activity
+            ?: (view.context as? android.content.ContextWrapper)?.let {
+                var ctx: android.content.Context? = it
+                while (ctx is android.content.ContextWrapper) {
+                    if (ctx is Activity) break
+                    ctx = ctx.baseContext
+                }
+                ctx as? Activity
+            }
+        activity?.window?.let { window ->
+            SideEffect {
+                val insetsController = WindowCompat.getInsetsController(window, view)
+                insetsController.isAppearanceLightStatusBars = !darkTheme
+                insetsController.isAppearanceLightNavigationBars = !darkTheme
+            }
         }
     }
 

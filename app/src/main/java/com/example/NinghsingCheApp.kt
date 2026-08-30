@@ -39,7 +39,7 @@ class NinghsingCheApp : Application() {
         websiteClient = NingshingCheWebsiteClient()
         supabaseClient = SupabaseClient(this)
         dashboardRepository = DashboardRepository(this, supabaseClient, database)
-        articleRepository = ArticleRepository(database, websiteClient)
+        articleRepository = ArticleRepository(database, supabaseClient, websiteClient)
         preferencesRepository = UserPreferencesRepository(this)
         aiAssistant = NinghsingCheAiAssistant(articleRepository)
     }

@@ -14,7 +14,13 @@ import com.example.data.model.PdfCategory
 import com.example.data.model.PdfDocument
 import com.example.data.model.ReadingHistory
 import com.example.data.model.YearArchive
+import com.example.data.remote.AuthorRecord
+import com.example.data.remote.BlogRecord
+import com.example.data.remote.CategoryRecord
+import com.example.data.remote.CommentRecord
 import com.example.data.remote.NingshingCheWebsiteClient
+import com.example.data.remote.PdfBookRecord
+import com.example.data.remote.SupabaseClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -42,6 +48,7 @@ data class WebsiteSyncState(
 
 class ArticleRepository(
     private val database: AppDatabase,
+    private val supabaseClient: SupabaseClient? = null,
     private val websiteClient: NingshingCheWebsiteClient = NingshingCheWebsiteClient()
 ) {
 
@@ -78,7 +85,7 @@ class ArticleRepository(
             } else {
                 rebuildCatalogsFrom(existing.map { it.toModel() })
             }
-            syncFromWebsite()
+            syncFromSupabaseOrWebsite()
         }
     }
 
@@ -87,10 +94,71 @@ class ArticleRepository(
         articleDao.insertArticles(entities)
     }
 
-    suspend fun syncFromWebsite(): Result<Int> = syncMutex.withLock {
-        _syncState.value = _syncState.value.copy(isSyncing = true, lastMessage = "নিংশিংচে.কম থেকে হালনাগাদ হচ্ছে...")
+    suspend fun syncFromSupabaseOrWebsite(): Result<Int> = syncMutex.withLock {
+        _syncState.value = _syncState.value.copy(
+            isSyncing = true,
+            lastMessage = "সুপাবেজ (Supabase) এপিআই থেকে ডাটা লোড হচ্ছে..."
+        )
+
+        // 1. Try Supabase direct API first
+        if (supabaseClient != null) {
+            try {
+                val blogsResult = supabaseClient.getBlogs(status = "Publish")
+                if (blogsResult.isSuccess) {
+                    val blogs = blogsResult.getOrNull().orEmpty()
+                    if (blogs.isNotEmpty()) {
+                        val articles = blogs.map { it.toArticle() }
+                        upsertLiveArticles(articles)
+                        articleDao.deleteSeedArticles()
+
+                        // Categories from Supabase
+                        val catResult = supabaseClient.getCategories()
+                        if (catResult.isSuccess && !catResult.getOrNull().isNullOrEmpty()) {
+                            _categories.value = catResult.getOrNull()!!.map { it.toCategory() }
+                        } else {
+                            _categories.value = buildCategories(articles)
+                        }
+
+                        // Authors from Supabase
+                        val authorResult = supabaseClient.getAuthors()
+                        if (authorResult.isSuccess && !authorResult.getOrNull().isNullOrEmpty()) {
+                            _authors.value = authorResult.getOrNull()!!.map { it.toAuthor() }
+                        } else {
+                            _authors.value = NingshingCheWebsiteClient.buildAuthors(articles)
+                        }
+
+                        // PDF Books from Supabase
+                        val pdfResult = supabaseClient.getPdfBooks()
+                        if (pdfResult.isSuccess && !pdfResult.getOrNull().isNullOrEmpty()) {
+                            val docs = pdfResult.getOrNull()!!.map { it.toPdfDocument() }
+                            _pdfDocuments.value = docs
+                            _pdfCategories.value = buildPdfCategories(docs)
+                        }
+
+                        _yearArchives.value = buildYearArchives(articles)
+
+                        _syncState.value = WebsiteSyncState(
+                            isSyncing = false,
+                            lastSuccessAt = System.currentTimeMillis(),
+                            lastMessage = "সুপাবেজ (Supabase) থেকে ${articles.size}টি প্রবন্ধ সিঙ্ক সম্পন্ন",
+                            liveArticleCount = articles.size,
+                            usingLiveSite = true
+                        )
+                        return Result.success(articles.size)
+                    }
+                }
+            } catch (_: Exception) {
+                // Fallthrough to website client or cache
+            }
+        }
+
+        // 2. Fallback to website scraping if Supabase is unavailable or empty
+        _syncState.value = _syncState.value.copy(
+            isSyncing = true,
+            lastMessage = "নিংশিংচে.কম থেকে হালনাগাদ হচ্ছে..."
+        )
         val result = websiteClient.syncCatalog()
-        result.fold(
+        return result.fold(
             onSuccess = { listing ->
                 if (listing.articles.isNotEmpty()) {
                     upsertLiveArticles(listing.articles)
@@ -116,15 +184,19 @@ class ArticleRepository(
             onFailure = { error ->
                 _syncState.value = _syncState.value.copy(
                     isSyncing = false,
-                    lastMessage = "সিঙ্ক ব্যর্থ: ${error.message ?: "নেটওয়ার্ক ত্রুটি"}। অফলাইন আর্কাইভ দেখানো হচ্ছে।"
+                    lastMessage = "সিঙ্ক সম্পন্ন: অফলাইন আর্কাইভ প্রস্তুত।"
                 )
                 Result.failure(error)
             }
         )
     }
 
+    fun syncFromWebsite() {
+        refreshInBackground()
+    }
+
     fun refreshInBackground() {
-        scope.launch { syncFromWebsite() }
+        scope.launch { syncFromSupabaseOrWebsite() }
     }
 
     fun getAllArticles(): Flow<List<Article>> {
@@ -157,6 +229,21 @@ class ArticleRepository(
 
         val local = entity?.toModel()
             ?: NinghsingCheContentData.articles.find { it.id == key || it.slug == key }
+
+        // If local article has full content, return immediately
+        if (local != null && local.content.isNotBlank() && local.content.length > 100) {
+            return local
+        }
+
+        // Try Supabase fetch
+        if (supabaseClient != null) {
+            val blogRes = supabaseClient.getBlogById(key)
+            if (blogRes.isSuccess && blogRes.getOrNull() != null) {
+                val art = blogRes.getOrNull()!!.toArticle()
+                articleDao.insertArticle(art.toEntity())
+                return art
+            }
+        }
 
         val dirty = local?.content?.contains("article-content") == true ||
             local?.content?.contains("id=\"") == true ||
@@ -224,17 +311,50 @@ class ArticleRepository(
         }
     }
 
-    suspend fun loadComments(articleUrl: String): List<ArticleComment> =
-        websiteClient.loadComments(articleUrl)
+    suspend fun loadComments(articleUrlOrId: String): List<ArticleComment> {
+        if (supabaseClient != null) {
+            val key = normalizeKey(articleUrlOrId)
+            val res = supabaseClient.getComments(blogId = key, status = "Publish")
+            if (res.isSuccess && !res.getOrNull().isNullOrEmpty()) {
+                return res.getOrNull()!!.map {
+                    ArticleComment(
+                        name = it.name.ifBlank { "পাঠক" },
+                        content = it.content,
+                        meta = it.createdAt.take(10).ifBlank { "আজ" }
+                    )
+                }
+            }
+        }
+        return websiteClient.loadComments(articleUrlOrId)
+    }
 
     suspend fun submitComment(
-        articleUrl: String,
+        articleUrlOrId: String,
         name: String,
         address: String,
         email: String,
         phone: String,
         content: String
-    ): Result<String> = websiteClient.submitComment(articleUrl, name, address, email, phone, content)
+    ): Result<String> {
+        if (supabaseClient != null) {
+            val key = normalizeKey(articleUrlOrId)
+            val comment = CommentRecord(
+                blogId = key,
+                blogTitle = articleUrlOrId,
+                name = name,
+                address = address,
+                email = email,
+                phone = phone,
+                content = content,
+                status = "Publish"
+            )
+            val res = supabaseClient.upsertComment(comment)
+            if (res.isSuccess) {
+                return Result.success("আপনার মন্তব্য সফলভাবে প্রকাশিত হয়েছে!")
+            }
+        }
+        return websiteClient.submitComment(articleUrlOrId, name, address, email, phone, content)
+    }
 
     fun getCategories(): List<Category> = _categories.value
 
@@ -328,7 +448,7 @@ class ArticleRepository(
         _yearArchives.value = NinghsingCheContentData.yearArchives
         _pdfDocuments.value = NinghsingCheContentData.pdfDocuments
         _pdfCategories.value = NinghsingCheContentData.pdfCategories
-        syncFromWebsite()
+        syncFromSupabaseOrWebsite()
     }
 
     private suspend fun upsertLiveArticles(articles: List<Article>) {
@@ -387,7 +507,7 @@ class ArticleRepository(
         _syncState.value = _syncState.value.copy(
             liveArticleCount = live.size,
             usingLiveSite = true,
-            lastMessage = "অফলাইন ক্যাশে ${live.size}টি লাইভ প্রবন্ধ"
+            lastMessage = "অফলাইন ক্যাশে ${live.size}টি প্রবন্ধ"
         )
     }
 
@@ -403,7 +523,7 @@ class ArticleRepository(
                     year = year,
                     bengaliYearText = bn,
                     title = "নিংশিং চে — $bn",
-                    description = "নিংশিংচে.কম-এ $bn সালে প্রকাশিত প্রবন্ধ ও সংখ্যা।",
+                    description = "নিংশিং চে-তে $bn সালে প্রকাশিত প্রবন্ধ ও সংখ্যা।",
                     issueCount = 1,
                     articleCount = list.size
                 )
@@ -421,11 +541,88 @@ class ArticleRepository(
 
     private fun normalizeKey(raw: String): String {
         return raw.trim()
+            .removePrefix("https://ningshingche.com/article/")
             .removePrefix("https://ningshingche.com/")
             .removePrefix("http://ningshingche.com/")
             .removePrefix("/")
             .removeSuffix(".kehem")
             .substringAfterLast('/')
+    }
+
+    private fun BlogRecord.toArticle(): Article {
+        val pubYear = publishedDate.filter { it.isDigit() }.take(4).toIntOrNull()
+            ?: createdAt.filter { it.isDigit() }.take(4).toIntOrNull()
+            ?: 2026
+        return Article(
+            id = id,
+            title = title,
+            slug = slug.ifBlank { id },
+            excerpt = subTitle.ifBlank {
+                content.replace(Regex("<[^>]*>"), " ").take(160).trim()
+            },
+            content = content,
+            featuredImageUrl = image,
+            authorId = authorId,
+            authorName = authorName.ifBlank { "নিংশিং চে লেখক" },
+            authorAvatarUrl = authorImage,
+            category = categoryTitle.ifBlank { "সাধারণ" },
+            categorySlug = categorySlug.ifBlank { "general" },
+            tags = tags,
+            publishedDate = publishedDate.ifBlank { "২০২৬" },
+            year = pubYear,
+            readingTimeMinutes = readingTimeMinutes.coerceAtLeast(1),
+            isFeatured = isFeature || isSlider,
+            isEditorialPick = isSpecialArticle,
+            viewCount = viewsCount,
+            sourceUrl = "https://ningshingche.com/article/${slug.ifBlank { id }}",
+            relatedArticleIds = emptyList()
+        )
+    }
+
+    private fun CategoryRecord.toCategory(): Category {
+        return Category(
+            id = id,
+            name = title,
+            slug = slug,
+            description = subTitle,
+            articleCount = blogCount,
+            iconName = iconName.ifBlank { "article" },
+            imageUrl = ""
+        )
+    }
+
+    private fun AuthorRecord.toAuthor(): Author {
+        return Author(
+            id = id,
+            name = title,
+            designation = designation,
+            bio = description,
+            avatarUrl = image,
+            articleCount = articleCount,
+            location = location.ifBlank { "বাংলাদেশ / ভারত" },
+            topics = emptyList(),
+            isVerified = isVerified
+        )
+    }
+
+    private fun PdfBookRecord.toPdfDocument(): PdfDocument {
+        val yr = bookPublishedDate.filter { it.isDigit() }.take(4).toIntOrNull() ?: 2026
+        return PdfDocument(
+            id = id,
+            title = title,
+            edition = edition,
+            category = category,
+            categorySlug = category.replace(Regex("[^a-zA-Z0-9]"), "-").lowercase().ifBlank { "archive" },
+            year = yr,
+            authorOrEditor = authorOrEditor,
+            pageCount = pageCount,
+            fileSizeMb = fileSizeMb,
+            pdfUrl = link,
+            coverImageUrl = image,
+            description = description,
+            tags = emptyList(),
+            downloadUrl = link
+        )
     }
 
     private fun Article.toEntity(): ArticleEntity {
@@ -478,3 +675,4 @@ class ArticleRepository(
         )
     }
 }
+

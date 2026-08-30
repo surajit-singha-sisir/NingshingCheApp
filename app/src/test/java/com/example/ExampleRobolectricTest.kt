@@ -2,7 +2,9 @@ package com.example
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.example.data.repository.NinghsingCheContentData
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -16,6 +18,14 @@ class ExampleRobolectricTest {
   fun `read string from context`() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val appName = context.getString(R.string.app_name)
-    assertEquals("My Application", appName)
+    assertEquals("নিংশিং চে", appName)
+  }
+
+  @Test
+  fun `verify content data loaded`() {
+    assertNotNull(NinghsingCheContentData.categories)
+    assertNotNull(NinghsingCheContentData.pdfDocuments)
+    assertEquals(true, NinghsingCheContentData.categories.isNotEmpty())
   }
 }
+
