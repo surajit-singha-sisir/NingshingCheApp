@@ -60,6 +60,8 @@ interface PortalApi {
     @GET("blogs")
     suspend fun blogs(
         @Query("select") select: String = BLOG_LIST_COLUMNS,
+        @Query("id") id: String? = null,
+        @Query("slug", encoded = true) slug: String? = null,
         @Query("status") status: String? = null,
         @Query("category_id") categoryId: String? = null,
         @Query("author_id") authorId: String? = null,
@@ -93,7 +95,7 @@ interface PortalApi {
     @GET("categories")
     suspend fun categoryBySlug(
         @Query("select") select: String = CATEGORY_COLUMNS,
-        @Query("slug") slug: String,
+        @Query("slug", encoded = true) slug: String,
         @Query("limit") limit: Int = 1
     ): Response<List<CategoryDto>>
 
@@ -120,7 +122,7 @@ interface PortalApi {
     @GET("galleries")
     suspend fun galleries(
         @Query("select") select: String = GALLERY_COLUMNS,
-        @Query("category") category: String? = null,
+        @Query("category", encoded = true) category: String? = null,
         @Query("order") order: String = "created_at.desc",
         @Query("limit") limit: Int? = null,
         @Query("offset") offset: Int? = null
@@ -170,7 +172,7 @@ interface PortalApi {
     @GET("settings")
     suspend fun settings(
         @Query("select") select: String = SETTINGS_COLUMNS,
-        @Query("id") id: String = "site_settings",
+        @Query("id") id: String = "eq.site_settings",
         @Query("limit") limit: Int = 1
     ): Response<List<SettingsDto>>
 }

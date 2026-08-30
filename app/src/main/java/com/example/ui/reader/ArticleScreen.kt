@@ -133,7 +133,7 @@ fun ArticleScreen(
 
             is ArticleUiState.Error -> ErrorState(
                 message = current.message,
-                onRetry = onBackClick,
+                onRetry = { viewModel.retry() },
                 modifier = Modifier.padding(padding)
             )
 

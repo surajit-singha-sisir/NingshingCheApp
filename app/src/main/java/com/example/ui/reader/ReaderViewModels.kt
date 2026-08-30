@@ -108,14 +108,23 @@ class ArticleViewModel(private val repository: PortalRepository) : ViewModel() {
     private val _isPostingComment = MutableStateFlow(false)
     val isPostingComment: StateFlow<Boolean> = _isPostingComment.asStateFlow()
 
+    private var currentIdOrSlug: String = ""
+
+    fun retry() {
+        if (currentIdOrSlug.isNotBlank()) {
+            load(currentIdOrSlug)
+        }
+    }
+
     fun load(idOrSlug: String) {
-        if (idOrSlug.isBlank()) {
+        currentIdOrSlug = idOrSlug.trim()
+        if (currentIdOrSlug.isBlank()) {
             _state.value = ArticleUiState.Error("প্রবন্ধটি পাওয়া যায়নি।")
             return
         }
         viewModelScope.launch {
             _state.value = ArticleUiState.Loading
-            val detail = repository.article(idOrSlug)
+            val detail = repository.article(currentIdOrSlug)
 
             if (detail.isFailure) {
                 _state.value = ArticleUiState.Error((detail.exceptionOrNull() as? PortalError).message())

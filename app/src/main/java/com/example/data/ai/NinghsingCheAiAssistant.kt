@@ -1,15 +1,33 @@
 package com.example.data.ai
 
+import com.example.BuildConfig
 import com.example.data.model.AiChatMessage
 import com.example.data.model.Article
 import com.example.data.model.ArticleCitation
 import com.example.data.repository.ArticleRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
+import org.json.JSONObject
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 class NinghsingCheAiAssistant(private val repository: ArticleRepository) {
 
-    suspend fun answerQuestion(userQuestion: String): AiChatMessage {
+    private val httpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(45, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .build()
+    }
+
+    suspend fun answerQuestion(userQuestion: String): AiChatMessage = withContext(Dispatchers.IO) {
         val query = userQuestion.trim()
         val articles = repository.getAllArticles().first()
         val live = articles.filter { !it.id.startsWith("art-") }
@@ -33,19 +51,94 @@ class NinghsingCheAiAssistant(private val repository: ArticleRepository) {
             )
         }
 
-        val answer = if (ranked.isEmpty()) {
+        // Try Gemini 3.5 Flash first if API key is configured
+        val geminiAnswer = tryCallGemini(query, ranked.map { it.first })
+        val finalAnswer = if (!geminiAnswer.isNullOrBlank()) {
+            geminiAnswer
+        } else if (ranked.isEmpty()) {
             buildFallback(query, pool, sync.liveArticleCount, sync.usingLiveSite)
         } else {
             buildAnswer(query, ranked.map { it.first }, pool.size, sync.usingLiveSite)
         }
 
-        return AiChatMessage(
+        AiChatMessage(
             id = UUID.randomUUID().toString(),
-            text = answer,
+            text = finalAnswer,
             isUser = false,
             timestamp = System.currentTimeMillis(),
             citations = citations
         )
+    }
+
+    private fun tryCallGemini(query: String, contextArticles: List<Article>): String? {
+        val apiKey = runCatching { BuildConfig.GEMINI_API_KEY }.getOrNull().orEmpty()
+        if (apiKey.isBlank() || apiKey.startsWith("AIzaSyDummy")) {
+            return null
+        }
+
+        return try {
+            val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=$apiKey"
+            
+            val contextText = if (contextArticles.isNotEmpty()) {
+                "প্রাসঙ্গিক নিংশিং চে নিবন্ধসমূহ:\n" + contextArticles.take(3).joinToString("\n---\n") {
+                    "শিরোনাম: ${it.title}\nলেখক: ${it.authorName}\nবিভাগ: ${it.category}\nসারসংক্ষেপ: ${it.excerpt.ifBlank { it.content.take(300) }}"
+                }
+            } else {
+                "কোনো সরাসরি নিবন্ধ পাওয়া যায়নি, সাধারণ বিষ্ণুপ্রিয়া মণিপুরি সাহিত্য ও সংস্কৃতির তথ্য দিয়ে সাহায্য করুন।"
+            }
+
+            val prompt = """
+                ব্যবহারকারীর প্রশ্ন: $query
+                
+                $contextText
+                
+                নির্দেশনা:
+                ১. আপনি 'নিংশিং চে AI সহকারী' (NingshingChe AI Assistant) — বিষ্ণুপ্রিয়া মণিপুরি সাহিত্য, ভাষা, সংস্কৃতি, ইতিহাস ও নিংশিং চে পোর্টালের জন্য নিবেদিত কৃত্রিম বুদ্ধিমত্তা সহকারী।
+                ২. সুন্দর, সাবলীল ও তথ্যবহুল বাংলায় (অথবা ব্যবহারকারী চাইলে বিষ্ণুপ্রিয়া মণিপুরিতে) উত্তর দিন।
+                ৩. নিংশিং চে-এর প্রবন্ধের সূত্র উল্লেখ করে সম্মানজনক ও গভীর আলোচনা উপস্থাপন করুন।
+            """.trimIndent()
+
+            val jsonBody = JSONObject().apply {
+                put("contents", JSONArray().apply {
+                    put(JSONObject().apply {
+                        put("parts", JSONArray().apply {
+                            put(JSONObject().apply {
+                                put("text", prompt)
+                            })
+                        })
+                    })
+                })
+                put("systemInstruction", JSONObject().apply {
+                    put("parts", JSONArray().apply {
+                        put(JSONObject().apply {
+                            put("text", "You are NingshingChe AI Assistant (নিংশিং চে AI সহকারী), an expert on Bishnupriya Manipuri literature, language, culture, traditions, festivals, mythology, and articles from ningshingche.com.")
+                        })
+                    })
+                })
+            }
+
+            val request = Request.Builder()
+                .url(endpoint)
+                .post(jsonBody.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
+                .build()
+
+            httpClient.newCall(request).execute().use { response ->
+                if (response.isSuccessful) {
+                    val responseBody = response.body?.string().orEmpty()
+                    val jsonResponse = JSONObject(responseBody)
+                    val candidates = jsonResponse.optJSONArray("candidates")
+                    val firstCandidate = candidates?.optJSONObject(0)
+                    val content = firstCandidate?.optJSONObject("content")
+                    val parts = content?.optJSONArray("parts")
+                    val text = parts?.optJSONObject(0)?.optString("text")
+                    if (!text.isNullOrBlank()) {
+                        text.trim()
+                    } else null
+                } else null
+            }
+        } catch (_: Exception) {
+            null
+        }
     }
 
     private fun tokenize(query: String): List<String> {

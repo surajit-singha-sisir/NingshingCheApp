@@ -29,11 +29,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BrokenImage
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -47,10 +51,15 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.example.data.portal.ArticleSummary
 import com.example.data.portal.AuthorRef
@@ -489,21 +498,409 @@ fun NumberedArticleCard(
 // ---------------------------------------------------------------------------
 
 @Composable
+fun AnimatedHamburgerIcon(
+    tint: Color = MaterialTheme.colorScheme.onSurface,
+    modifier: Modifier = Modifier
+) {
+    androidx.compose.foundation.Canvas(modifier = modifier.size(24.dp)) {
+        val stroke = 2.2.dp.toPx()
+        val cap = StrokeCap.Round
+        val w = size.width
+        val h = size.height
+
+        // 3 refined editorial lines
+        drawLine(
+            color = tint,
+            start = Offset(2.dp.toPx(), h * 0.22f),
+            end = Offset(w - 2.dp.toPx(), h * 0.22f),
+            strokeWidth = stroke,
+            cap = cap
+        )
+        drawLine(
+            color = tint,
+            start = Offset(2.dp.toPx(), h * 0.50f),
+            end = Offset(w - 7.dp.toPx(), h * 0.50f),
+            strokeWidth = stroke,
+            cap = cap
+        )
+        drawLine(
+            color = tint,
+            start = Offset(2.dp.toPx(), h * 0.78f),
+            end = Offset(w - 2.dp.toPx(), h * 0.78f),
+            strokeWidth = stroke,
+            cap = cap
+        )
+    }
+}
+
+@Composable
+fun AiAssistantHomeBanner(
+    onAiClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val tokens = LocalEditorialTokens.current
+    Card(
+        onClick = onAiClick,
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (tokens.isDark) Color(0xFF261814) else Color(0xFFFBF4EC)
+        ),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = EditorialSpace.gutter, vertical = EditorialSpace.xs)
+            .border(
+                1.dp,
+                if (tokens.isDark) Color(0xFF4A2F25) else Color(0xFFE8D3C1),
+                RoundedCornerShape(16.dp)
+            )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = tokens.accent,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = "নিংশিং চে AI সহকারী",
+                        fontFamily = com.example.ui.theme.Kalpurush,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "বিষ্ণুপ্রিয়া মণিপুরি ভাষা, সাহিত্য, সংস্কৃতি ও ইতিহাসের যে কোনো প্রশ্ন করুন",
+                        fontFamily = com.example.ui.theme.Kalpurush,
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp,
+                        color = tokens.inkSoft
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            // Quick suggestion chips
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                listOf("ভাষা আন্দোলন", "ইমচৌঘর", "মিংকৌ প্রথা", "বিশু উৎসব").forEach { tag ->
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (tokens.isDark) Color(0xFF38231C) else Color(0xFFFFFFFF),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (tokens.isDark) Color(0xFF5A392F) else Color(0xFFE2CEBC)
+                        )
+                    ) {
+                        Text(
+                            text = tag,
+                            fontFamily = com.example.ui.theme.Kalpurush,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = tokens.accent,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "AI সহকারীকে জিজ্ঞাসা করুন",
+                    fontFamily = com.example.ui.theme.Kalpurush,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = tokens.accent
+                )
+                Spacer(Modifier.width(4.dp))
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    tint = tokens.accent,
+                    modifier = Modifier.size(14.dp)
+                )
+            }
+        }
+    }
+}
+
+private fun getFallbackCategoryImage(slug: String, title: String): String {
+    return when {
+        slug.contains("history") || title.contains("ইতিহাস") ->
+            "https://images.unsplash.com/photo-1461360370896-922624d12aa1?w=600&auto=format&fit=crop&q=80"
+        slug.contains("literature") || title.contains("সাহিত্য") ->
+            "https://images.unsplash.com/photo-1457369804613-52c61a468e7d?w=600&auto=format&fit=crop&q=80"
+        slug.contains("culture") || title.contains("সংস্কৃতি") ->
+            "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=600&auto=format&fit=crop&q=80"
+        slug.contains("social") || title.contains("সমাজ") ->
+            "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=600&auto=format&fit=crop&q=80"
+        slug.contains("play") || title.contains("নাটক") ->
+            "https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?w=600&auto=format&fit=crop&q=80"
+        else ->
+            "https://images.unsplash.com/photo-1455390582262-044cdead277a?w=600&auto=format&fit=crop&q=80"
+    }
+}
+
+@Composable
+fun CategoryVisualCard(
+    category: CategoryRef,
+    imageUrl: String,
+    isSelected: Boolean = false,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        onClick = onClick,
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = LocalEditorialTokens.current.surfaceSunken),
+        modifier = modifier
+            .width(152.dp)
+            .height(100.dp)
+            .then(
+                if (isSelected) Modifier.border(2.dp, LocalEditorialTokens.current.accent, RoundedCornerShape(14.dp))
+                else Modifier.border(1.dp, LocalEditorialTokens.current.rule, RoundedCornerShape(14.dp))
+            )
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            AsyncImage(
+                model = imageUrl,
+                contentDescription = category.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            // High contrast gradient overlay for crisp legibility
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0x33000000),
+                                Color(0x881A120B),
+                                Color(0xFA140D08)
+                            )
+                        )
+                    )
+            )
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = category.title,
+                    fontFamily = com.example.ui.theme.Kalpurush,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    lineHeight = 20.sp,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (category.subTitle.isNotBlank()) {
+                    Text(
+                        text = category.subTitle,
+                        fontFamily = com.example.ui.theme.Kalpurush,
+                        fontSize = 11.sp,
+                        lineHeight = 14.sp,
+                        color = Color(0xFFFFD59E),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 1.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun CategoryRail(
     categories: List<CategoryRef>,
-    selectedSlug: String?,
+    articles: List<ArticleSummary> = emptyList(),
+    selectedSlug: String? = null,
     onSelect: (CategoryRef) -> Unit
 ) {
-    LazyRow(
-        contentPadding = PaddingValues(horizontal = EditorialSpace.gutter),
-        horizontalArrangement = Arrangement.spacedBy(EditorialSpace.xs)
+    if (categories.isEmpty()) return
+    Column(modifier = Modifier.fillMaxWidth()) {
+        SectionHeader(
+            title = "বিষয় ও বিভাগ",
+            subtitle = "বিষ্ণুপ্রিয়া মণিপুরি সাহিত্য ও সাংস্কৃতিক ধারা"
+        )
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = EditorialSpace.gutter),
+            horizontalArrangement = Arrangement.spacedBy(EditorialSpace.md)
+        ) {
+            items(categories, key = { it.id }) { category ->
+                val firstArticle = articles.firstOrNull {
+                    it.categorySlug == category.slug ||
+                    it.categoryId == category.id ||
+                    it.categoryTitle.equals(category.title, ignoreCase = true)
+                }
+                val thumbUrl = firstArticle?.imageUrl?.takeIf { it.isNotBlank() }
+                    ?: getFallbackCategoryImage(category.slug, category.title)
+
+                CategoryVisualCard(
+                    category = category,
+                    imageUrl = thumbUrl,
+                    isSelected = category.slug == selectedSlug,
+                    onClick = { onSelect(category) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun GalleryModalDialog(
+    item: GalleryItem,
+    onDismiss: () -> Unit,
+    onShare: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true
+        )
     ) {
-        items(categories, key = { it.id }) { category ->
-            CategoryPill(
-                title = category.title,
-                selected = category.slug == selectedSlug,
-                onClick = { onSelect(category) }
-            )
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surface,
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .padding(vertical = 24.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                // Header with category badge & close
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = LocalEditorialTokens.current.accentSoft
+                    ) {
+                        Text(
+                            text = item.category.ifBlank { "ছবি ঘর" },
+                            fontFamily = com.example.ui.theme.Kalpurush,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = LocalEditorialTokens.current.accent,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "বন্ধ করুন",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                // Image
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(4f / 3f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(LocalEditorialTokens.current.surfaceSunken)
+                ) {
+                    AsyncImage(
+                        model = item.imageUrl,
+                        contentDescription = item.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+
+                Spacer(Modifier.height(14.dp))
+
+                // Title
+                Text(
+                    text = item.title,
+                    fontFamily = com.example.ui.theme.Kalpurush,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    lineHeight = 25.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                // Description
+                if (item.description.isNotBlank()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = item.description,
+                        fontFamily = com.example.ui.theme.Kalpurush,
+                        fontSize = 14.sp,
+                        lineHeight = 22.sp,
+                        color = LocalEditorialTokens.current.inkSoft
+                    )
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+                // Actions
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onShare) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = LocalEditorialTokens.current.accent
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "শেয়ার করুন",
+                            fontFamily = com.example.ui.theme.Kalpurush,
+                            fontWeight = FontWeight.Bold,
+                            color = LocalEditorialTokens.current.accent
+                        )
+                    }
+                }
+            }
         }
     }
 }

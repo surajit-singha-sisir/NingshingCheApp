@@ -71,6 +71,7 @@ internal fun ArticleList(
     onArticleClick: (String) -> Unit,
     onLoadMore: () -> Unit,
     modifier: Modifier = Modifier,
+    onRetry: () -> Unit = { },
     header: @Composable (() -> Unit)? = null
 ) {
     val listState = rememberLazyListState()
@@ -95,7 +96,7 @@ internal fun ArticleList(
 
         is ListUiState.Error -> ErrorState(
             message = state.message,
-            onRetry = { },
+            onRetry = onRetry,
             modifier = modifier
         )
 
@@ -219,6 +220,7 @@ fun SearchScreen(
                 state = state,
                 onArticleClick = onArticleClick,
                 onLoadMore = viewModel::loadMore,
+                onRetry = { viewModel.submit(field.text) },
                 modifier = Modifier.padding(padding)
             ) {
                 if (state is ListUiState.Ready) {
@@ -300,6 +302,7 @@ fun CategoryScreen(
             state = state,
             onArticleClick = onArticleClick,
             onLoadMore = viewModel::loadMore,
+            onRetry = { viewModel.load() },
             modifier = Modifier.padding(padding)
         ) {
             Column(modifier = Modifier.padding(horizontal = EditorialSpace.gutter, vertical = EditorialSpace.md)) {
@@ -369,6 +372,7 @@ fun AuthorScreen(
             state = state,
             onArticleClick = onArticleClick,
             onLoadMore = viewModel::loadMore,
+            onRetry = { viewModel.load() },
             modifier = Modifier.padding(padding)
         ) {
             AuthorHeader(author = author)

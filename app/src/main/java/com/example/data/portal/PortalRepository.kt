@@ -191,7 +191,7 @@ class PortalRepository(
         callPage {
             api.blogs(
                 status = "eq.Publish",
-                or = "title.ilike.$pattern,sub_title.ilike.$pattern,slug.ilike.$pattern",
+                or = "(title.ilike.$pattern,sub_title.ilike.$pattern,slug.ilike.$pattern)",
                 order = PortalApi.FEED_ORDER,
                 limit = limit,
                 offset = offset
@@ -201,11 +201,39 @@ class PortalRepository(
 
     /** Fetch a single article by UUID or slug (deep links use the slug). */
     suspend fun article(idOrSlug: String): Result<ArticleDetail> = withContext(Dispatchers.IO) {
-        if (idOrSlug.isBlank()) return@withContext Result.failure(PortalError.NotFound)
+        val trimmed = idOrSlug.trim()
+        if (trimmed.isBlank()) return@withContext Result.failure(PortalError.NotFound)
+
+        val isUuid = runCatching { java.util.UUID.fromString(trimmed) }.isSuccess
+
         callList {
-            api.blogByIdOrSlug(or = "id.eq.${escapeFilterValue(idOrSlug)},slug.eq.${escapeFilterValue(idOrSlug)}")
+            if (isUuid) {
+                api.blogs(
+                    select = PortalApi.BLOG_DETAIL_COLUMNS,
+                    id = "eq.$trimmed",
+                    limit = 1
+                )
+            } else {
+                api.blogs(
+                    select = PortalApi.BLOG_DETAIL_COLUMNS,
+                    slug = "eq.${escapeFilterValue(trimmed)}",
+                    limit = 1
+                )
+            }
         }.mapCatching { list ->
-            list.firstOrNull()?.toDetail() ?: throw PortalError.NotFound
+            val first = list.firstOrNull()
+            if (first != null) {
+                first.toDetail()
+            } else if (isUuid) {
+                val fallback = api.blogs(
+                    select = PortalApi.BLOG_DETAIL_COLUMNS,
+                    slug = "eq.${escapeFilterValue(trimmed)}",
+                    limit = 1
+                ).body()?.firstOrNull()
+                fallback?.toDetail() ?: throw PortalError.NotFound
+            } else {
+                throw PortalError.NotFound
+            }
         }
     }
 
@@ -219,7 +247,9 @@ class PortalRepository(
         }
 
     suspend fun categoryBySlug(slug: String): Result<CategoryRef> = withContext(Dispatchers.IO) {
-        callList { api.categoryBySlug(slug = slug) }.mapCatching { list ->
+        val trimmed = slug.trim()
+        if (trimmed.isBlank()) return@withContext Result.failure(PortalError.NotFound)
+        callList { api.categoryBySlug(slug = "eq.${escapeFilterValue(trimmed)}") }.mapCatching { list ->
             list.firstOrNull()?.toRef() ?: throw PortalError.NotFound
         }
     }
@@ -235,7 +265,9 @@ class PortalRepository(
     }
 
     suspend fun author(id: String): Result<AuthorRef> = withContext(Dispatchers.IO) {
-        callList { api.authorById(id = id) }.mapCatching { list ->
+        val trimmed = id.trim()
+        if (trimmed.isBlank()) return@withContext Result.failure(PortalError.NotFound)
+        callList { api.authorById(id = "eq.$trimmed") }.mapCatching { list ->
             list.firstOrNull()?.toRef() ?: throw PortalError.NotFound
         }
     }
@@ -245,8 +277,9 @@ class PortalRepository(
         limit: Int = 24,
         offset: Int = 0
     ): Result<Page<GalleryItem>> = withContext(Dispatchers.IO) {
+        val catFilter = category?.trim()?.takeIf { it.isNotBlank() }?.let { "eq.${escapeFilterValue(it)}" }
         callPage {
-            api.galleries(category = category, limit = limit, offset = offset)
+            api.galleries(category = catFilter, limit = limit, offset = offset)
         }.map { page -> page.mapItems { it.toItem() } }
     }
 

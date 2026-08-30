@@ -6,17 +6,19 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.AppThemeMode
 import com.example.data.model.ReaderPreferences
 import com.example.ui.editorial.EditorialTheme
 import com.example.ui.reader.EditorialReaderApp
+import kotlinx.coroutines.launch
 
 /**
  * Host activity for the public reader.
  *
- * All navigation lives in [EditorialReaderApp]; this class only owns the theme
+ * All navigation lives in [EditorialReaderApp]; this class owns the theme
  * (system / light / dark, read from DataStore) and the edge-to-edge window.
  */
 class MainActivity : ComponentActivity() {
@@ -30,6 +32,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             val preferences by app.preferencesRepository.readerPreferences
                 .collectAsStateWithLifecycle(initialValue = ReaderPreferences())
+            val coroutineScope = rememberCoroutineScope()
+
             val darkTheme = when (preferences.appThemeMode) {
                 AppThemeMode.SYSTEM -> isSystemInDarkTheme()
                 AppThemeMode.LIGHT -> false
@@ -38,7 +42,14 @@ class MainActivity : ComponentActivity() {
 
             EditorialTheme(darkTheme = darkTheme) {
                 EditorialReaderApp(
-                    repository = app.portalRepository,
+                    app = app,
+                    isDark = darkTheme,
+                    onToggleTheme = {
+                        coroutineScope.launch {
+                            val nextMode = if (darkTheme) AppThemeMode.LIGHT else AppThemeMode.DARK
+                            app.preferencesRepository.updateAppThemeMode(nextMode)
+                        }
+                    },
                     modifier = Modifier
                 )
             }

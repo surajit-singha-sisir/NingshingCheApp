@@ -170,7 +170,7 @@ object EditorialType {
     )
 
     val Masthead = TextStyle(
-        fontFamily = FontFamily.Serif,
+        fontFamily = com.example.ui.theme.Kalpurush,
         fontWeight = FontWeight.Bold,
         fontSize = 26.sp,
         lineHeight = 32.sp,
@@ -178,7 +178,7 @@ object EditorialType {
     )
 
     val Display = TextStyle(
-        fontFamily = FontFamily.Serif,
+        fontFamily = com.example.ui.theme.Kalpurush,
         fontWeight = FontWeight.Bold,
         fontSize = 34.sp,
         lineHeight = 42.sp,
@@ -187,7 +187,7 @@ object EditorialType {
     )
 
     val Headline = TextStyle(
-        fontFamily = FontFamily.Serif,
+        fontFamily = com.example.ui.theme.Kalpurush,
         fontWeight = FontWeight.SemiBold,
         fontSize = 24.sp,
         lineHeight = 32.sp,
@@ -196,7 +196,7 @@ object EditorialType {
     )
 
     val Title = TextStyle(
-        fontFamily = FontFamily.Serif,
+        fontFamily = com.example.ui.theme.Kalpurush,
         fontWeight = FontWeight.SemiBold,
         fontSize = 19.sp,
         lineHeight = 27.sp,
@@ -205,22 +205,26 @@ object EditorialType {
     )
 
     val Subtitle = TextStyle(
+        fontFamily = com.example.ui.theme.Kalpurush,
         fontWeight = FontWeight.SemiBold,
         fontSize = 15.sp,
         lineHeight = 23.sp
     )
 
     val Body = TextStyle(
+        fontFamily = com.example.ui.theme.Kalpurush,
         fontSize = 16.sp,
         lineHeight = 27.sp
     )
 
     val BodySmall = TextStyle(
+        fontFamily = com.example.ui.theme.Kalpurush,
         fontSize = 14.sp,
         lineHeight = 23.sp
     )
 
     val Caption = TextStyle(
+        fontFamily = com.example.ui.theme.Kalpurush,
         fontSize = 12.sp,
         lineHeight = 18.sp,
         letterSpacing = 0.2.sp
@@ -228,6 +232,7 @@ object EditorialType {
 
     /** Small caps–style section eyebrows. Uppercase Latin, normal Bengali. */
     val Eyebrow = TextStyle(
+        fontFamily = com.example.ui.theme.Kalpurush,
         fontWeight = FontWeight.Bold,
         fontSize = 12.sp,
         lineHeight = 16.sp,
@@ -236,6 +241,7 @@ object EditorialType {
 
     /** Drop-cap-capable lede paragraph for the article reader. */
     val Lede = TextStyle(
+        fontFamily = com.example.ui.theme.Kalpurush,
         fontSize = 18.sp,
         lineHeight = 31.sp,
         fontWeight = FontWeight.Medium
