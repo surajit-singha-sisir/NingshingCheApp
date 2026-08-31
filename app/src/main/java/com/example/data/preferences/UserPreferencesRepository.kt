@@ -14,6 +14,10 @@ import com.example.data.model.ReaderThemeMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
+import androidx.datastore.preferences.core.emptyPreferences
+import kotlinx.coroutines.flow.catch
+import java.io.IOException
+
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "ningshingche_settings")
 
 class UserPreferencesRepository(private val context: Context) {
@@ -28,7 +32,15 @@ class UserPreferencesRepository(private val context: Context) {
         val NOTIF_FEATURED = booleanPreferencesKey("notif_featured")
     }
 
-    val readerPreferences: Flow<ReaderPreferences> = context.dataStore.data.map { preferences ->
+    val readerPreferences: Flow<ReaderPreferences> = context.dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                emit(emptyPreferences())
+            } else {
+                emit(emptyPreferences())
+            }
+        }
+        .map { preferences ->
         val fontSize = preferences[Keys.FONT_SIZE] ?: 18f
         val lineSpacing = preferences[Keys.LINE_SPACING] ?: 1.6f
         val themeModeStr = preferences[Keys.THEME_MODE] ?: ReaderThemeMode.PAPER.name

@@ -27,7 +27,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        val app = application as NinghsingCheApp
+        val app = (application as? NinghsingCheApp) ?: NinghsingCheApp.instance
 
         setContent {
             val preferences by app.preferencesRepository.readerPreferences

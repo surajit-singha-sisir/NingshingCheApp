@@ -27,5 +27,10 @@ class ExampleRobolectricTest {
     assertNotNull(NinghsingCheContentData.pdfDocuments)
     assertEquals(true, NinghsingCheContentData.categories.isNotEmpty())
   }
+
+  @Test
+  fun `launch MainActivity test`() {
+    org.robolectric.Robolectric.buildActivity(MainActivity::class.java).setup()
+  }
 }
 
