@@ -9,8 +9,11 @@ import androidx.compose.ui.unit.sp
 import com.example.R
 
 val Kalpurush = FontFamily(
-    Font(R.font.kalpurush)
+    Font(R.font.kalpurush, FontWeight.Normal)
 )
+
+val BengDefaultSerif = FontFamily.Serif
+val BengDefaultSans = FontFamily.Default
 
 val EditorialTypography = Typography(
     displayLarge = TextStyle(
