@@ -1,6 +1,7 @@
 package com.example.ui.reader
 
 import android.content.Intent
+import android.net.Uri
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -65,6 +66,7 @@ import com.example.data.portal.CategoryRef
 import com.example.data.portal.GalleryItem
 import com.example.data.portal.PdfBook
 import com.example.data.portal.VideoItem
+import com.example.ui.editorial.EditorialFooter
 import com.example.ui.components.HomeSkeletonLayout
 import com.example.ui.components.NingshingCheBrandLogo
 import com.example.ui.editorial.AiAssistantHomeBanner
@@ -79,6 +81,7 @@ import com.example.ui.editorial.EmptyState
 import com.example.ui.editorial.ErrorState
 import com.example.ui.editorial.GalleryGrid
 import com.example.ui.editorial.GalleryModalDialog
+import com.example.ui.editorial.VideoPlayerDialog
 import com.example.ui.editorial.Hairline
 import com.example.ui.editorial.HeroArticleCard
 import com.example.ui.editorial.LocalEditorialTokens
@@ -112,14 +115,14 @@ fun HomeScreen(
     onCategoryClick: (CategoryRef) -> Unit,
     onAuthorClick: (AuthorRef) -> Unit,
     onSearchClick: () -> Unit,
-    onGalleryClick: (GalleryItem) -> Unit,
     onPdfClick: (PdfBook) -> Unit,
-    onVideoClick: (VideoItem) -> Unit,
     onSeeAllLatest: () -> Unit,
     onSeeAllFeatured: () -> Unit = {},
     onMenuClick: () -> Unit = {},
     onAiClick: () -> Unit = {},
     onToggleTheme: () -> Unit = {},
+    onNavigate: (String) -> Unit = {},
+    onOpenLink: (String) -> Unit = {},
     isDark: Boolean = false,
     modifier: Modifier = Modifier
 ) {
@@ -228,12 +231,12 @@ fun HomeScreen(
                     onArticleClick = onArticleClick,
                     onCategoryClick = onCategoryClick,
                     onAuthorClick = onAuthorClick,
-                    onGalleryClick = onGalleryClick,
                     onPdfClick = onPdfClick,
-                    onVideoClick = onVideoClick,
                     onSeeAllLatest = onSeeAllLatest,
                     onSeeAllFeatured = onSeeAllFeatured,
-                    onAiClick = onAiClick
+                    onAiClick = onAiClick,
+                    onNavigate = onNavigate,
+                    onOpenLink = onOpenLink
                 )
             }
         }
@@ -248,15 +251,17 @@ private fun HomeContent(
     onArticleClick: (String) -> Unit,
     onCategoryClick: (CategoryRef) -> Unit,
     onAuthorClick: (AuthorRef) -> Unit,
-    onGalleryClick: (GalleryItem) -> Unit,
     onPdfClick: (PdfBook) -> Unit,
-    onVideoClick: (VideoItem) -> Unit,
     onSeeAllLatest: () -> Unit,
     onSeeAllFeatured: () -> Unit,
-    onAiClick: () -> Unit
+    onAiClick: () -> Unit,
+    onNavigate: (String) -> Unit = {},
+    onOpenLink: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
-    var selectedGalleryItem by remember { mutableStateOf<GalleryItem?>(null) }
+    // Index (not the item) so the viewer can page through the whole gallery.
+    var selectedGalleryIndex by remember { mutableStateOf<Int?>(null) }
+    var selectedVideo by remember { mutableStateOf<VideoItem?>(null) }
 
     // Aggregate all articles for category thumb lookup
     val allArticles = remember(feed) {
@@ -275,12 +280,13 @@ private fun HomeContent(
         if (featOnly.isNotEmpty()) featOnly else feed.featured
     }
 
-    // Interactive In-App Gallery Modal
-    selectedGalleryItem?.let { item ->
+    // Interactive in-app gallery viewer - swipe left/right for the next/previous photo.
+    selectedGalleryIndex?.let { index ->
         GalleryModalDialog(
-            item = item,
-            onDismiss = { selectedGalleryItem = null },
-            onShare = {
+            items = feed.gallery,
+            initialIndex = index,
+            onDismiss = { selectedGalleryIndex = null },
+            onShare = { item ->
                 val sendIntent = Intent().apply {
                     action = Intent.ACTION_SEND
                     putExtra(
@@ -290,6 +296,21 @@ private fun HomeContent(
                     type = "text/plain"
                 }
                 context.startActivity(Intent.createChooser(sendIntent, "ছবি শেয়ার করুন"))
+            }
+        )
+    }
+
+    // In-app video player (YouTube iframe / Facebook video plugin in a WebView).
+    selectedVideo?.let { video ->
+        VideoPlayerDialog(
+            video = video,
+            onDismiss = { selectedVideo = null },
+            onOpenExternal = { url ->
+                if (url.isNotBlank()) {
+                    runCatching {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                    }
+                }
             }
         )
     }
@@ -371,7 +392,7 @@ private fun HomeContent(
                 GalleryGrid(
                     items = feed.gallery,
                     onItemClick = { item ->
-                        selectedGalleryItem = item
+                        selectedGalleryIndex = feed.gallery.indexOf(item)
                     }
                 )
             }
@@ -389,7 +410,7 @@ private fun HomeContent(
 
         // 8. Video Rail
         if (feed.videos.isNotEmpty()) {
-            item { VideoRail(videos = feed.videos, onVideoClick = onVideoClick) }
+            item { VideoRail(videos = feed.videos, onVideoClick = { selectedVideo = it }) }
         }
 
         // 9. Authors Rail
@@ -417,7 +438,13 @@ private fun HomeContent(
             }
         }
 
-        item { Footer(title = feed.settings.title) }
+        item {
+            EditorialFooter(
+                settings = feed.settings,
+                onNavigate = onNavigate,
+                onOpenLink = onOpenLink
+            )
+        }
     }
 }
 
@@ -483,31 +510,6 @@ private fun HeroCarousel(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun Footer(title: String) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = EditorialSpace.gutter, vertical = EditorialSpace.xl),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Hairline()
-        Spacer(Modifier.height(EditorialSpace.md))
-        Text(
-            text = title,
-            style = EditorialType.Title,
-            color = LocalEditorialTokens.current.inkSoft
-        )
-        Spacer(Modifier.height(EditorialSpace.xxs))
-        Text(
-            text = "ningshingche.com",
-            style = EditorialType.Caption,
-            color = LocalEditorialTokens.current.inkMuted,
-            textAlign = TextAlign.Center
-        )
     }
 }
 

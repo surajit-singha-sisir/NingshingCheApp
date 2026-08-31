@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -25,9 +26,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BrokenImage
@@ -44,6 +48,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,7 +65,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import coil.compose.AsyncImage
 import com.example.data.portal.ArticleSummary
 import com.example.data.portal.AuthorRef
 import com.example.data.portal.CategoryRef
@@ -168,20 +172,16 @@ fun EditorialImage(
     contentScale: ContentScale = ContentScale.Crop,
     shape: Shape = RoundedCornerShape(EditorialShape.thumb)
 ) {
-    if (url.isBlank()) {
-        EmptyThumb(modifier = modifier, shape = shape)
-        return
-    }
-    AsyncImage(
-        model = url,
+    // Delegates to LazyImage so every image in the reader gets viewport-gated
+    // loading plus a shimmer skeleton. Blank URLs fall back to a reserved
+    // placeholder there, which keeps the layout from collapsing.
+    LazyImage(
+        url = url,
         contentDescription = contentDescription,
+        modifier = modifier,
         contentScale = contentScale,
-        modifier = modifier.clip(shape),
-        error = null
+        shape = shape
     )
-    // NOTE: coil's `error` slot is intentionally unused so a failed load keeps
-    // the reserved space; wrap with EmptyThumb at the call site when a URL is
-    // known to be missing.
 }
 
 @Composable
@@ -315,8 +315,8 @@ fun HeroArticleCard(
         modifier = modifier.fillMaxWidth()
     ) {
         Box(modifier = Modifier.fillMaxWidth().aspectRatio(16f / 10f)) {
-            AsyncImage(
-                model = article.imageUrl,
+            LazyImage(
+                url = article.imageUrl,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
@@ -689,8 +689,8 @@ fun CategoryVisualCard(
             )
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            AsyncImage(
-                model = imageUrl,
+            LazyImage(
+                url = imageUrl,
                 contentDescription = category.title,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
@@ -780,10 +780,18 @@ fun CategoryRail(
 
 @Composable
 fun GalleryModalDialog(
-    item: GalleryItem,
+    items: List<GalleryItem>,
+    initialIndex: Int = 0,
     onDismiss: () -> Unit,
-    onShare: () -> Unit
+    onShare: (GalleryItem) -> Unit
 ) {
+    if (items.isEmpty()) return
+
+    val startPage = initialIndex.coerceIn(0, items.lastIndex)
+    val pagerState = rememberPagerState(initialPage = startPage, pageCount = { items.size })
+    val scope = rememberCoroutineScope()
+    val tokens = LocalEditorialTokens.current
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
@@ -793,41 +801,49 @@ fun GalleryModalDialog(
         )
     ) {
         Surface(
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(EditorialShape.sheet),
             color = MaterialTheme.colorScheme.surface,
             modifier = Modifier
-                .fillMaxWidth(0.92f)
+                .fillMaxWidth(0.96f)
+                .fillMaxHeight(0.9f)
                 .padding(vertical = 24.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-            ) {
-                // Header with category badge & close
+            Column(modifier = Modifier.fillMaxWidth()) {
+
+                // --- Header: counter, category, close -----------------------
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = LocalEditorialTokens.current.accentSoft
-                    ) {
-                        Text(
-                            text = item.category.ifBlank { "ছবি ঘর" },
-                            fontFamily = com.example.ui.theme.Kalpurush,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = LocalEditorialTokens.current.accent,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                        )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Surface(
+                            shape = RoundedCornerShape(EditorialShape.chip),
+                            color = tokens.accentSoft
+                        ) {
+                            Text(
+                                text = items[pagerState.currentPage].category.ifBlank { "ছবি ঘর" },
+                                fontFamily = com.example.ui.theme.Kalpurush,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = tokens.accent,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
+                        if (items.size > 1) {
+                            Text(
+                                text = "${bengaliDigits(pagerState.currentPage + 1)} / ${bengaliDigits(items.size)}",
+                                fontFamily = com.example.ui.theme.Kalpurush,
+                                fontSize = 12.sp,
+                                color = tokens.inkMuted,
+                                modifier = Modifier.padding(start = 10.dp, top = 4.dp)
+                            )
+                        }
                     }
 
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.size(32.dp)
-                    ) {
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = "বন্ধ করুন",
@@ -836,75 +852,156 @@ fun GalleryModalDialog(
                     }
                 }
 
-                Spacer(Modifier.height(12.dp))
-
-                // Image
+                // --- Swipeable image ---------------------------------------
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .aspectRatio(4f / 3f)
+                        .weight(1f)
+                        .padding(horizontal = 16.dp)
                         .clip(RoundedCornerShape(14.dp))
-                        .background(LocalEditorialTokens.current.surfaceSunken)
+                        .background(tokens.surfaceSunken)
                 ) {
-                    AsyncImage(
-                        model = item.imageUrl,
-                        contentDescription = item.title,
-                        contentScale = ContentScale.Crop,
+                    HorizontalPager(
+                        state = pagerState,
                         modifier = Modifier.fillMaxSize()
-                    )
+                    ) { page ->
+                        val item = items[page]
+                        LazyImage(
+                            url = item.imageUrl,
+                            contentDescription = item.title,
+                            contentScale = ContentScale.Fit,
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+
+                    // Arrow affordances, so the viewer is not swipe-only.
+                    if (items.size > 1) {
+                        IconButton(
+                            onClick = {
+                                scope.launch {
+                                    pagerState.animateScrollToPage(
+                                        (pagerState.currentPage - 1).coerceAtLeast(0)
+                                    )
+                                }
+                            },
+                            enabled = pagerState.currentPage > 0,
+                            modifier = Modifier.align(Alignment.CenterStart)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "আগের ছবি",
+                                tint = if (pagerState.currentPage > 0) Color.White
+                                else Color.White.copy(alpha = 0.25f)
+                            )
+                        }
+                        IconButton(
+                            onClick = {
+                                scope.launch {
+                                    pagerState.animateScrollToPage(
+                                        (pagerState.currentPage + 1).coerceAtMost(items.lastIndex)
+                                    )
+                                }
+                            },
+                            enabled = pagerState.currentPage < items.lastIndex,
+                            modifier = Modifier.align(Alignment.CenterEnd)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = "পরের ছবি",
+                                tint = if (pagerState.currentPage < items.lastIndex) Color.White
+                                else Color.White.copy(alpha = 0.25f)
+                            )
+                        }
+                    }
                 }
 
-                Spacer(Modifier.height(14.dp))
-
-                // Title
-                Text(
-                    text = item.title,
-                    fontFamily = com.example.ui.theme.Kalpurush,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
-                    lineHeight = 25.sp,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-
-                // Description
-                if (item.description.isNotBlank()) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = item.description,
-                        fontFamily = com.example.ui.theme.Kalpurush,
-                        fontSize = 14.sp,
-                        lineHeight = 22.sp,
-                        color = LocalEditorialTokens.current.inkSoft
-                    )
-                }
-
-                Spacer(Modifier.height(16.dp))
-
-                // Actions
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
+                // --- Caption ------------------------------------------------
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
                 ) {
-                    TextButton(onClick = onShare) {
-                        Icon(
-                            imageVector = Icons.Default.Share,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = LocalEditorialTokens.current.accent
-                        )
-                        Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = items[pagerState.currentPage].title,
+                        fontFamily = com.example.ui.theme.Kalpurush,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        lineHeight = 25.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    val description = items[pagerState.currentPage].description
+                    if (description.isNotBlank()) {
+                        Spacer(Modifier.height(8.dp))
                         Text(
-                            text = "শেয়ার করুন",
+                            text = description,
                             fontFamily = com.example.ui.theme.Kalpurush,
-                            fontWeight = FontWeight.Bold,
-                            color = LocalEditorialTokens.current.accent
+                            fontSize = 14.sp,
+                            lineHeight = 22.sp,
+                            color = tokens.inkSoft,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis
                         )
+                    }
+
+                    // Dot indicator
+                    if (items.size > 1) {
+                        Spacer(Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            items.forEachIndexed { index, _ ->
+                                Box(
+                                    modifier = Modifier
+                                        .padding(horizontal = 3.dp)
+                                        .size(if (index == pagerState.currentPage) 7.dp else 5.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (index == pagerState.currentPage) tokens.accent
+                                            else tokens.ruleStrong
+                                        )
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(onClick = { onShare(items[pagerState.currentPage]) }) {
+                            Icon(
+                                imageVector = Icons.Default.Share,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = tokens.accent
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = "শেয়ার করুন",
+                                fontFamily = com.example.ui.theme.Kalpurush,
+                                fontWeight = FontWeight.Bold,
+                                color = tokens.accent
+                            )
+                        }
                     }
                 }
             }
         }
     }
+}
+
+/** `12` -> `১২`, so the page counter matches the Bengali UI. */
+private fun bengaliDigits(value: Int): String {
+    val bengali = charArrayOf('০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯')
+    return value.toString().map { ch ->
+        if (ch in '0'..'9') bengali[ch - '0'] else ch
+    }.joinToString("")
 }
 
 @Composable

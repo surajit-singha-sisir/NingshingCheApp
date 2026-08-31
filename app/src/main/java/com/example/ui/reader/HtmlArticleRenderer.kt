@@ -80,6 +80,7 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.SubcomposeAsyncImage
 import com.example.ui.editorial.Hairline
 import com.example.ui.editorial.LocalEditorialTokens
+import com.example.ui.editorial.ShimmerPlaceholder
 import com.example.ui.theme.Kalpurush
 import java.util.regex.Pattern
 
@@ -614,18 +615,11 @@ fun FullWidthArticleImage(
                 contentDescription = alt.ifBlank { "প্রবন্ধের ছবি" },
                 contentScale = ContentScale.FillWidth,
                 loading = {
-                    Box(
+                    ShimmerPlaceholder(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(200.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(28.dp),
-                            strokeWidth = 2.5.dp,
-                            color = tokens.accent
-                        )
-                    }
+                            .height(200.dp)
+                    )
                 },
                 error = {
                     Box(
@@ -746,9 +740,7 @@ fun ImageEnlargeModal(
                     contentDescription = "পূর্ণ আকারের ছবি",
                     contentScale = ContentScale.Fit,
                     loading = {
-                        Box(modifier = Modifier.size(60.dp), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(color = Color.White)
-                        }
+                        ShimmerPlaceholder(modifier = Modifier.size(60.dp))
                     },
                     modifier = Modifier
                         .fillMaxWidth()

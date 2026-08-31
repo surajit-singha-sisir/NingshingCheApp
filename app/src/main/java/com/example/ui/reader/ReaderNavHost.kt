@@ -191,9 +191,7 @@ fun EditorialReaderApp(
                     onCategoryClick = { navController.navigate(ReaderRoute.category(it.slug)) },
                     onAuthorClick = { navController.navigate(ReaderRoute.author(it.id)) },
                     onSearchClick = { navController.navigate(ReaderRoute.Search) },
-                    onGalleryClick = { /* Displayed via in-app modal in HomeScreen */ },
                     onPdfClick = { book -> navController.navigate(ReaderRoute.pdfViewer(book.id)) },
-                    onVideoClick = { openExternal(it.url) },
                     onSeeAllLatest = { navController.navigate(ReaderRoute.Search) },
                     onSeeAllFeatured = { navController.navigate(ReaderRoute.Featured) },
                     onMenuClick = {
@@ -203,6 +201,8 @@ fun EditorialReaderApp(
                         navController.navigate(ReaderRoute.AiAssistant)
                     },
                     onToggleTheme = onToggleTheme,
+                    onNavigate = { route -> navController.navigate(route) },
+                    onOpenLink = openExternal,
                     isDark = isDark
                 )
             }
