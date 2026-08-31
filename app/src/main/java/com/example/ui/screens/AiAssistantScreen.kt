@@ -5,14 +5,19 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -23,9 +28,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -43,13 +48,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.R
 import com.example.data.model.AiChatMessage
 import com.example.data.model.ArticleCitation
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -66,7 +74,8 @@ import kotlinx.coroutines.delay
 fun AiAssistantScreen(
     viewModel: AiViewModel,
     onBackClick: () -> Unit,
-    onArticleClick: (String) -> Unit
+    onArticleClick: (String) -> Unit,
+    onMenuClick: () -> Unit = {}
 ) {
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
@@ -83,6 +92,16 @@ fun AiAssistantScreen(
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.size - 1)
+        }
+    }
+
+    // The app is edge-to-edge, so the IME insets are ours to handle. Re-scroll to the
+    // newest message whenever the keyboard appears, otherwise the bar covers it.
+    val density = LocalDensity.current
+    val keyboardVisible = WindowInsets.ime.getBottom(density) > 0
+    LaunchedEffect(keyboardVisible) {
+        if (keyboardVisible && messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.lastIndex)
         }
     }
 
@@ -103,11 +122,14 @@ fun AiAssistantScreen(
                 })
             }
     ) {
-        // Top Header
+        // Top Header: hamburger | brand logo | title | dismiss.
         Surface(
             color = MaterialTheme.colorScheme.surface,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-            shadowElevation = 1.dp
+            shadowElevation = 1.dp,
+            // The screen is edge-to-edge and has no Scaffold, so the header has to
+            // clear the status bar itself - same approach as PortalTopBar.
+            modifier = Modifier.statusBarsPadding()
         ) {
             Row(
                 modifier = Modifier
@@ -118,35 +140,26 @@ fun AiAssistantScreen(
                 IconButton(
                     onClick = {
                         focusManager.clearFocus()
-                        onBackClick()
+                        onMenuClick()
                     },
-                    modifier = Modifier.testTag("ai_back_button")
+                    modifier = Modifier.testTag("ai_menu_button")
                 ) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
+                        imageVector = Icons.Default.Menu,
+                        contentDescription = "মেনু",
                         tint = MaterialTheme.colorScheme.onSurface
                     )
                 }
 
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.AutoAwesome,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
+                Image(
+                    painter = painterResource(R.drawable.ic_ningshingche_logo),
+                    contentDescription = "নিংশিং চে",
+                    modifier = Modifier.height(34.dp)
+                )
 
                 Spacer(modifier = Modifier.width(10.dp))
 
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "নিংশিং চে AI সহকারী",
                         style = MaterialTheme.typography.titleMedium.copy(
@@ -154,14 +167,30 @@ fun AiAssistantScreen(
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
                             fontSize = 16.sp
-                        )
+                        ),
+                        maxLines = 1
                     )
                     Text(
                         text = "বিষ্ণুপ্রিয়া মণিপুরি ঐতিহ্য ও বিশ্ব জ্ঞানকোষ",
                         style = MaterialTheme.typography.bodySmall.copy(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 11.sp
-                        )
+                        ),
+                        maxLines = 1
+                    )
+                }
+
+                IconButton(
+                    onClick = {
+                        focusManager.clearFocus()
+                        onBackClick()
+                    },
+                    modifier = Modifier.testTag("ai_hide_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "AI সহকারী লুকান",
+                        tint = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
@@ -261,7 +290,15 @@ fun AiAssistantScreen(
         Surface(
             color = MaterialTheme.colorScheme.surface,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                // Lifts the whole bar (background included) above the software
+                // keyboard, and above the gesture bar when the keyboard is closed.
+                // union() takes the larger inset per side, so the two never
+                // stack into a double-sized gap while the keyboard is up.
+                // The message list takes weight(1f), so it shrinks to fill
+                // whatever space is left.
+                .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
         ) {
             Row(
                 modifier = Modifier

@@ -292,7 +292,10 @@ fun EditorialReaderApp(
                 AiAssistantScreen(
                     viewModel = aiViewModel,
                     onBackClick = { navController.popBackStack() },
-                    onArticleClick = { navController.navigate(ReaderRoute.article(it)) }
+                    onArticleClick = { navController.navigate(ReaderRoute.article(it)) },
+                    onMenuClick = {
+                        coroutineScope.launch { drawerState.open() }
+                    }
                 )
             }
 
