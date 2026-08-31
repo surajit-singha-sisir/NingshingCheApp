@@ -2,18 +2,13 @@ package com.example.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
-import com.example.R
 
-val Kalpurush = FontFamily(
-    Font(R.font.kalpurush, FontWeight.Normal)
-)
-
-val BengDefaultSerif = FontFamily.Serif
-val BengDefaultSans = FontFamily.Default
+val Kalpurush: FontFamily = FontFamily.Serif
+val BengDefaultSerif: FontFamily = FontFamily.Serif
+val BengDefaultSans: FontFamily = FontFamily.Default
 
 val EditorialTypography = Typography(
     displayLarge = TextStyle(
