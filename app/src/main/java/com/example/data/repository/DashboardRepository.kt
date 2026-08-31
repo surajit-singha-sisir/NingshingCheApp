@@ -18,6 +18,7 @@ import com.example.data.remote.SupabaseClient
 import com.example.data.remote.UserProfile
 import com.example.data.remote.UserRole
 import com.example.data.remote.VideoRecord
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +26,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import android.util.Log
 import java.util.UUID
 
 class DashboardRepository(
@@ -32,7 +34,15 @@ class DashboardRepository(
     val supabaseClient: SupabaseClient,
     private val database: AppDatabase
 ) {
-    private val scope = CoroutineScope(Dispatchers.IO)
+    companion object {
+        private const val TAG = "DashboardRepository"
+    }
+
+    private val scope = CoroutineScope(
+        Dispatchers.IO + CoroutineExceptionHandler { _, throwable ->
+            Log.e(TAG, "Background dashboard work failed", throwable)
+        }
+    )
 
     private val _authors = MutableStateFlow<List<AuthorRecord>>(emptyList())
     val authors: StateFlow<List<AuthorRecord>> = _authors.asStateFlow()
@@ -72,8 +82,12 @@ class DashboardRepository(
 
     init {
         scope.launch {
-            initializeDefaultsFromSeed()
-            refreshAll()
+            runCatching {
+                initializeDefaultsFromSeed()
+                refreshAll()
+            }.onFailure { error ->
+                Log.e(TAG, "Startup refresh skipped; continuing with seeded data.", error)
+            }
         }
     }
 

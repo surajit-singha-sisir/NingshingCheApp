@@ -21,6 +21,7 @@ import com.example.data.remote.CommentRecord
 import com.example.data.remote.NingshingCheWebsiteClient
 import com.example.data.remote.PdfBookRecord
 import com.example.data.remote.SupabaseClient
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -37,6 +38,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import android.util.Log
 
 data class WebsiteSyncState(
     val isSyncing: Boolean = false,
@@ -56,8 +58,22 @@ class ArticleRepository(
     private val bookmarkDao = database.bookmarkDao()
     private val historyDao = database.historyDao()
     private val searchDao = database.searchDao()
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    /**
+     * Startup and background work runs here. The [CoroutineExceptionHandler] is
+     * essential: without it, any failure inside the `init` sync below propagates
+     * to the process's uncaught-exception handler and Android kills the app on
+     * launch, which is exactly what a cold offline start used to do.
+     */
+    private val scope = CoroutineScope(
+        SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, throwable ->
+            Log.e(TAG, "Background article work failed", throwable)
+        }
+    )
     private val syncMutex = Mutex()
+
+    companion object {
+        private const val TAG = "ArticleRepository"
+    }
 
     private val _categories = MutableStateFlow(NinghsingCheContentData.categories)
     val categories: StateFlow<List<Category>> = _categories.asStateFlow()
@@ -79,13 +95,19 @@ class ArticleRepository(
 
     init {
         scope.launch {
-            val existing = articleDao.getAllArticles().first()
-            if (existing.isEmpty()) {
-                seedInitialArticles()
-            } else {
-                rebuildCatalogsFrom(existing.map { it.toModel() })
+            runCatching {
+                val existing = articleDao.getAllArticles().first()
+                if (existing.isEmpty()) {
+                    seedInitialArticles()
+                } else {
+                    rebuildCatalogsFrom(existing.map { it.toModel() })
+                }
+                syncFromSupabaseOrWebsite()
+            }.onFailure { error ->
+                // Offline, empty cache, or an unexpected schema change must never
+                // stop the app from opening.
+                Log.e(TAG, "Startup sync skipped; continuing with local data.", error)
             }
-            syncFromSupabaseOrWebsite()
         }
     }
 
