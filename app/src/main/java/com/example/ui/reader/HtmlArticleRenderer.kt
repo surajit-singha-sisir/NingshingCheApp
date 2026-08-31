@@ -34,7 +34,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FormatQuote
@@ -64,6 +63,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -328,12 +329,13 @@ fun buildHtmlAnnotatedString(
         val linkEnd = builder.length
 
         if (linkStart < linkEnd) {
+            val linkStyle = SpanStyle(
+                color = accentColor,
+                fontWeight = FontWeight.SemiBold,
+                textDecoration = TextDecoration.Underline
+            )
             builder.addStyle(
-                SpanStyle(
-                    color = accentColor,
-                    fontWeight = FontWeight.SemiBold,
-                    textDecoration = TextDecoration.Underline
-                ),
+                linkStyle,
                 linkStart,
                 linkEnd
             )
@@ -343,6 +345,11 @@ fun buildHtmlAnnotatedString(
                 start = linkStart,
                 end = linkEnd
             )
+            val linkAnnotation = LinkAnnotation.Url(
+                url = href,
+                styles = TextLinkStyles(style = linkStyle)
+            )
+            builder.addLink(linkAnnotation, linkStart, linkEnd)
             links.add(IntRange(linkStart, linkEnd) to href)
         }
 
@@ -506,14 +513,8 @@ fun RichHtmlArticleBody(
                         )
                         ClickableHtmlText(
                             annotatedString = annotated,
-                            links = links,
                             fontSizeSp = fontSizeSp,
                             lineSpacingMultiplier = lineSpacingMultiplier,
-                            onOpenLink = onOpenLink,
-                            onLongPressLink = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                triggerTactileVibration(context)
-                            },
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -554,21 +555,15 @@ fun RichHtmlArticleBody(
                 }
 
                 is HtmlBlock.Paragraph -> {
-                    val (annotated, links) = buildHtmlAnnotatedString(
+                    val (annotated, _) = buildHtmlAnnotatedString(
                         html = block.text,
                         accentColor = tokens.accent,
                         textColor = MaterialTheme.colorScheme.onSurface
                     )
                     ClickableHtmlText(
                         annotatedString = annotated,
-                        links = links,
                         fontSizeSp = fontSizeSp,
                         lineSpacingMultiplier = lineSpacingMultiplier,
-                        onOpenLink = onOpenLink,
-                        onLongPressLink = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            triggerTactileVibration(context)
-                        },
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -683,37 +678,22 @@ fun FullWidthArticleImage(
 }
 
 /**
- * Clickable Text component with styled annotations and long-press haptic feedback.
+ * HTML Text component supporting rich text and links with fluid vertical scrolling.
  */
 @Composable
 private fun ClickableHtmlText(
     annotatedString: AnnotatedString,
-    links: List<Pair<IntRange, String>>,
     fontSizeSp: Float,
     lineSpacingMultiplier: Float,
-    onOpenLink: (String) -> Unit,
-    onLongPressLink: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val tokens = LocalEditorialTokens.current
-
-    ClickableText(
+    Text(
         text = annotatedString,
-        style = TextStyle(
-            fontFamily = Kalpurush,
-            fontSize = fontSizeSp.sp,
-            lineHeight = (fontSizeSp * lineSpacingMultiplier).sp,
-            color = MaterialTheme.colorScheme.onSurface
-        ),
-        onClick = { offset ->
-            annotatedString.getStringAnnotations(tag = "URL", start = offset, end = offset)
-                .firstOrNull()?.let { annotation ->
-                    onOpenLink(annotation.item)
-                }
-        },
-        modifier = modifier.pointerInput(links) {
-            detectTransformGestures { _, _, _, _ -> }
-        }
+        fontFamily = Kalpurush,
+        fontSize = fontSizeSp.sp,
+        lineHeight = (fontSizeSp * lineSpacingMultiplier).sp,
+        color = MaterialTheme.colorScheme.onSurface,
+        modifier = modifier
     )
 }
 
