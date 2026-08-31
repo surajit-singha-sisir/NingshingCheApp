@@ -286,6 +286,7 @@ fun EditorialTheme(
     CompositionLocalProvider(LocalEditorialTokens provides if (darkTheme) DarkTokens else LightTokens) {
         MaterialTheme(
             colorScheme = if (darkTheme) DarkScheme else LightScheme,
+            typography = com.example.ui.theme.EditorialTypography,
             content = content
         )
     }

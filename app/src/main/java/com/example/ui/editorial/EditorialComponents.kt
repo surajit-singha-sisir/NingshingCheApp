@@ -276,9 +276,9 @@ fun CategoryPill(
     selected: Boolean = false
 ) {
     val tokens = LocalEditorialTokens.current
-    val background = if (selected) tokens.accent else Color.Transparent
-    val content = if (selected) MaterialTheme.colorScheme.onPrimary else tokens.inkSoft
-    val border = if (selected) Color.Transparent else tokens.rule
+    val background = if (selected) tokens.accent else tokens.accentSoft.copy(alpha = 0.6f)
+    val content = if (selected) MaterialTheme.colorScheme.onPrimary else tokens.accent
+    val border = if (selected) Color.Transparent else tokens.accent.copy(alpha = 0.35f)
     Surface(
         shape = RoundedCornerShape(EditorialShape.chip),
         color = background,
@@ -288,6 +288,8 @@ fun CategoryPill(
         Text(
             text = title,
             style = EditorialType.Caption,
+            fontFamily = com.example.ui.theme.Kalpurush,
+            fontWeight = FontWeight.Bold,
             color = content,
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
             maxLines = 1

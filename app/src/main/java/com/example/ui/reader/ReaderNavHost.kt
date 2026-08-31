@@ -235,7 +235,22 @@ fun EditorialReaderApp(
                 ArticleScreen(
                     viewModel = articleViewModel,
                     onBackClick = { navController.popBackStack() },
-                    onRelatedClick = { navController.navigate(ReaderRoute.article(it)) }
+                    onRelatedClick = { navController.navigate(ReaderRoute.article(it)) },
+                    onCategoryClick = { categorySlug ->
+                        if (categorySlug.isNotBlank()) {
+                            navController.navigate(ReaderRoute.category(categorySlug))
+                        }
+                    },
+                    onAuthorClick = { authorId ->
+                        if (authorId.isNotBlank()) {
+                            navController.navigate(ReaderRoute.author(authorId))
+                        }
+                    },
+                    onTagClick = { tag ->
+                        if (tag.isNotBlank()) {
+                            navController.navigate(ReaderRoute.category(tag))
+                        }
+                    }
                 )
             }
 

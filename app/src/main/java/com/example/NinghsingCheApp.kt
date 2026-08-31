@@ -41,14 +41,31 @@ class NinghsingCheApp : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
-        database = AppDatabase.getInstance(this)
-        websiteClient = NingshingCheWebsiteClient()
-        supabaseClient = SupabaseClient(this)
-        dashboardRepository = DashboardRepository(this, supabaseClient, database)
-        articleRepository = ArticleRepository(database, supabaseClient, websiteClient)
-        preferencesRepository = UserPreferencesRepository(this)
-        aiAssistant = NinghsingCheAiAssistant(articleRepository)
-        portalRepository = PortalProvider.repository()
+
+        // Safe global exception handler to log any startup issues
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            android.util.Log.e("NinghsingCheApp", "Uncaught exception on thread ${thread.name}: ${throwable.message}", throwable)
+            defaultHandler?.uncaughtException(thread, throwable)
+        }
+
+        try {
+            database = AppDatabase.getInstance(this)
+        } catch (e: Throwable) {
+            android.util.Log.e("NinghsingCheApp", "Database initialization fallback", e)
+        }
+
+        try {
+            websiteClient = NingshingCheWebsiteClient()
+            supabaseClient = SupabaseClient(this)
+            dashboardRepository = DashboardRepository(this, supabaseClient, database)
+            articleRepository = ArticleRepository(database, supabaseClient, websiteClient)
+            preferencesRepository = UserPreferencesRepository(this)
+            aiAssistant = NinghsingCheAiAssistant(articleRepository)
+            portalRepository = PortalProvider.repository()
+        } catch (e: Throwable) {
+            android.util.Log.e("NinghsingCheApp", "Service initialization error", e)
+        }
     }
 
     companion object {

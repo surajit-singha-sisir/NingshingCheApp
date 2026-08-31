@@ -90,6 +90,7 @@ sealed interface ArticleUiState {
     data object Loading : ArticleUiState
     data class Ready(
         val article: ArticleDetail,
+        val author: AuthorRef? = null,
         val comments: List<CommentItem> = emptyList(),
         val related: List<ArticleSummary> = emptyList(),
         val commentPosted: Boolean = false
@@ -133,6 +134,19 @@ class ArticleViewModel(private val repository: PortalRepository) : ViewModel() {
 
             val article = detail.getOrThrow()
             _state.value = ArticleUiState.Ready(article)
+
+            // Load author details if available
+            launch {
+                val authorId = article.summary.authorId
+                if (!authorId.isNullOrBlank()) {
+                    val authorRef = repository.author(authorId).getOrNull()
+                    if (authorRef != null) {
+                        _state.update { current ->
+                            (current as? ArticleUiState.Ready)?.copy(author = authorRef) ?: current
+                        }
+                    }
+                }
+            }
 
             // Comments and related reading are secondary: fetch them together
             // and drop either one if it fails rather than failing the article.
